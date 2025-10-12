@@ -1,0 +1,50 @@
+package Backend.ElectionVote.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
+
+import java.util.UUID;
+
+@Entity
+@Table(
+        name = "polling_center_allocation",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"election_id", "center_id"})
+        }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class PollingCenterAllocation {
+
+    @Id
+    @GeneratedValue
+    @UuidGenerator
+    @Column(name = "allocation_id", nullable = false, updatable = false)
+    private UUID allocationId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "election_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_allocation_election")
+    )
+    private Election election;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "center_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_allocation_center")
+    )
+    private PollingCenter pollingCenter;
+
+    @Column(name = "registered_voters", nullable = false)
+    private int registeredVoters;
+
+    @Column(name = "ballots_issued")
+    private Integer ballotsIssued;
+}

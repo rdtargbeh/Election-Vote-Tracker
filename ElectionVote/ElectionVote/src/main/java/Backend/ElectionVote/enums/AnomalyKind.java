@@ -1,0 +1,12 @@
+package Backend.ElectionVote.enums;
+
+public enum AnomalyKind {
+    BALLOT_MATH_MISMATCH,
+    OVER_CAPACITY_TURNOUT,
+    DUPLICATE_VERIFIED_ATTEMPT,
+    LATE_SUBMISSION,
+    GEO_OUT_OF_BOUNDS,
+    OCR_MISMATCH,
+    NETWORK_RETRY_SPIKE,
+    OTHER
+}
