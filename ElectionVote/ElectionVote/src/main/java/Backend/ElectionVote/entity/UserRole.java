@@ -32,4 +32,11 @@ public class UserRole {
     @Column(name = "description", length = 150)
     private String description;
 
+    // Optional builder for controlled construction (no relations here, so it's safe)
+    @Builder(toBuilder = true)
+    public UserRole(RoleName roleName, String description) {
+        this.roleName = roleName;
+        this.description = description;
+    }
+
 }

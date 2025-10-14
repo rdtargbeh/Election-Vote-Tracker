@@ -19,8 +19,13 @@ import java.util.UUID;
         name = "system_users",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uq_user_email", columnNames = "email")
+        },
+        indexes = {
+                @Index(name="idx_users_email", columnList="email"),
+                @Index(name="idx_users_username", columnList="user_name")
         }
 )
+
 public class SystemUser {
 
     @Id
@@ -64,6 +69,10 @@ public class SystemUser {
     @JoinColumn(name = "assigned_county", foreignKey = @ForeignKey(name = "fk_user_county"))
     private County assignedCounty;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_org_id", foreignKey = @ForeignKey(name = "fk_user_default_org"))
+    private Organization defaultOrg;
+
     /** Status flags **/
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
@@ -75,20 +84,18 @@ public class SystemUser {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
+    /** Security / audit **/
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
+    @Column(name = "last_password_change")
+    private LocalDateTime lastPasswordChange;
+
     @CreationTimestamp
     @Column(name = "date_created", nullable = false, updatable = false)
     private LocalDateTime dateCreated = LocalDateTime.now();
-
-    // Default organization (added after org table creation)
-    @Column(name = "default_org_id")
-    private UUID defaultOrgId;
-
-    private int failedLoginAttempts = 0;
-    private LocalDateTime lockedUntil;
-    private LocalDateTime lastPasswordChange;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "default_org_id")
-    private Organization defaultOrg;
 
 }
