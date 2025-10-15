@@ -19,6 +19,10 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     boolean existsBySubdomainIgnoreCaseAndOrgIdNot(String subdomain, UUID orgId);
 
+    boolean existsByParty_PartyId(UUID partyId);
+
+    boolean existsByOrgIdAndIsActiveTrue(UUID orgId);
+
     @Query("""
            select o from Organization o
            where (:q is null or lower(o.orgName) like lower(concat('%', :q, '%'))

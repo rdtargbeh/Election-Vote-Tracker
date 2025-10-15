@@ -9,6 +9,7 @@ import Backend.ElectionVote.mapper.UserMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.SystemUserService;
 import Backend.ElectionVote.uility.ChangePasswordRequest;
+import Backend.ElectionVote.uility.QueryUtils;
 import Backend.ElectionVote.uility.TenantContext;
 import Backend.ElectionVote.uility.UserSearchRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,17 +114,16 @@ public class SystemUserServiceImplementation implements SystemUserService {
     @Transactional(readOnly = true)
     public Page<UserDto> searchInTenant(UserSearchRequest req, Pageable pageable) {
         UUID orgId = requireTenant();
-        // Simple tenant-scoped search with a join on org_membership
-        // Ensure this exists in SystemUserRepository:
-        // @Query("select u from SystemUser u where exists (select 1 from OrgMembership m where m.orgId=:org and m.userId=u.userId and m.enabled=true) " +
-        //        "and (:q is null or lower(u.firstName) like lower(concat('%',:q,'%')) or lower(u.lastName) like lower(concat('%',:q,'%')) " +
-        //        "or lower(u.email) like lower(concat('%',:q,'%')) or lower(u.userName) like lower(concat('%',:q,'%'))) " +
-        //        "and (:active is null or u.isActive = :active)")
-        // Page<SystemUser> findAllInOrg(@Param("org") UUID orgId, @Param("q") String q, @Param("active") Boolean active, Pageable pg);
-
-        Page<SystemUser> page = systemUserRepository.findAllInOrg(orgId, req.getQ(), req.getActive(), pageable);
-        return page.map(this::toDto);
+        return systemUserRepository
+                .findAllInOrg(
+                        orgId,
+                        QueryUtils.normalize(req != null ? req.getQ() : null),
+                        req != null ? req.getActive() : null,
+                        pageable
+                )
+                .map(this::toDto);
     }
+
 
     @Override
     public UserDto updateInTenant(UUID userId, UserUpdateRequest req) {

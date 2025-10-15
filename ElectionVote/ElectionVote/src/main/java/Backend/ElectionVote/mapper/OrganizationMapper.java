@@ -4,7 +4,9 @@ import Backend.ElectionVote.dto.OrganizationCreateRequest;
 import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
 import Backend.ElectionVote.entity.Organization;
+import org.springframework.stereotype.Component;
 
+@Component
 public class OrganizationMapper {
 
     public OrganizationDto toDTO(Organization org) {

@@ -19,6 +19,15 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
     /** Load a specific membership (e.g., to change org-scoped roleName). */
     Optional<OrgMembership> findByOrganization_OrgIdAndUser_UserId(UUID orgId, UUID userId);
 
+    Page<OrgMembership> findByOrganization_OrgId(UUID orgId, Pageable pageable);
+
+    Page<OrgMembership> findByUser_UserId(UUID userId, Pageable pageable);
+
+
+    boolean existsByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
+
+    Optional<OrgMembership> findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
+
 
     @Query("""
            select m from OrgMembership m

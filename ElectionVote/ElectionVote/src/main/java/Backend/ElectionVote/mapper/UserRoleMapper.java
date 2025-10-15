@@ -4,7 +4,9 @@ import Backend.ElectionVote.dto.UserCreateRoleRequest;
 import Backend.ElectionVote.dto.UserRoleDto;
 import Backend.ElectionVote.dto.UserUpdateRoleRequest;
 import Backend.ElectionVote.entity.UserRole;
+import org.springframework.stereotype.Component;
 
+@Component
 public class UserRoleMapper {
 
     public UserRoleDto toDTO(UserRole role){

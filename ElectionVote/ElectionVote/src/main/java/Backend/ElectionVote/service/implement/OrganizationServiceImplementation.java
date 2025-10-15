@@ -10,6 +10,7 @@ import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.PartyRepository;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.uility.OrganizationSearchRequest;
+import Backend.ElectionVote.uility.QueryUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -70,9 +71,16 @@ public class OrganizationServiceImplementation implements OrganizationService {
     @Override
     @Transactional(readOnly = true)
     public Page<OrganizationDto> search(OrganizationSearchRequest req, Pageable pageable) {
-        Page<Organization> page = organizationRepository.search(req.getQ(), req.getActive(), req.getType(), pageable);
-        return page.map(mapper::toDTO);
+        return organizationRepository
+                .search(
+                        QueryUtils.normalize(req != null ? req.getQ() : null),
+                        req != null ? req.getActive() : null,
+                        req != null ? req.getType()   : null,
+                        pageable
+                )
+                .map(mapper::toDTO);
     }
+
 
     @Override
     public OrganizationDto update(UUID orgId, OrganizationUpdateRequest req) {

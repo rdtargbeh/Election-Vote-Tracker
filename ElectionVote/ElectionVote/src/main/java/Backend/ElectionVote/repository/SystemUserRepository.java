@@ -19,25 +19,47 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
     boolean existsByEmailIgnoreCase(String email);
     boolean existsByUserNameIgnoreCase(String userName);
 
+
+    /**
+     * Returns a page of users who belong to (are members of) the given organization, with optional filters.
+     *
+     * <p>JPQL breakdown:
+     * <ul>
+     *   <li><b>from OrgMembership m join m.user u</b> – start from membership rows and join to the user entity.
+     *       This guarantees results are scoped to users that actually have a membership entry.</li>
+     *   <li><b>m.organization.orgId = :org</b> – restrict to memberships in the specified organization (tenant).</li>
+     *   <li><b>m.enabled = true</b> – only members whose membership is currently enabled (no disabled/removed access).</li>
+     *   <li><b>:q filter</b> – if a non-null query string is provided, do a case-insensitive match against the user’s
+     *       first name, last name, email, or username.</li>
+     *   <li><b>:active filter</b> – if provided, also filter by the user’s global active flag.</li>
+     * </ul>
+     *
+     * Notes:
+     * <ul>
+     *   <li>This query enforces tenant scoping via the membership table (no user outside the org can appear).</li>
+     *   <li>The unique constraint on (org_id, user_id) prevents duplicates; otherwise you could add SELECT DISTINCT.</li>
+     *   <li>Pagination is handled by Spring Data via the returned {@code Page<SystemUser>}.</li>
+     * </ul>
+     */
+
     @Query("""
-           select u
-           from SystemUser u
-           where exists (
-               select 1
-               from OrgMembership m
-               where m.organization.orgId = :org
-                 and m.user.userId       = u.userId
-                 and m.enabled           = true
-           )
-           and (:q is null or
-                lower(u.firstName) like lower(concat('%', :q, '%')) or
-                lower(u.lastName)  like lower(concat('%', :q, '%')) or
-                lower(u.email)     like lower(concat('%', :q, '%')) or
-                lower(u.userName)  like lower(concat('%', :q, '%')))
-           and (:active is null or u.isActive = :active)
-           """)
+       select u
+       from OrgMembership m
+       join m.user u
+       where m.organization.orgId = :org
+         and m.enabled = true
+         and (:q is null or
+              lower(u.firstName) like lower(concat('%', :q, '%')) or
+              lower(u.lastName)  like lower(concat('%', :q, '%')) or
+              lower(u.email)     like lower(concat('%', :q, '%')) or
+              lower(u.userName)  like lower(concat('%', :q, '%')))
+         and (:active is null or u.isActive = :active)
+       """)
     Page<SystemUser> findAllInOrg(@Param("org") UUID orgId,
                                   @Param("q") String q,
                                   @Param("active") Boolean active,
                                   Pageable pageable);
+
+
+
 }

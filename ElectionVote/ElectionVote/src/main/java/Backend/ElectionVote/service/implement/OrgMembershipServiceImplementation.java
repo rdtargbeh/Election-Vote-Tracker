@@ -11,6 +11,7 @@ import Backend.ElectionVote.repository.OrgMembershipRepository;
 import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.service.OrgMembershipService;
+import Backend.ElectionVote.uility.QueryUtils;
 import Backend.ElectionVote.uility.TenantContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -34,20 +35,19 @@ public class OrgMembershipServiceImplementation implements OrgMembershipService 
 
     private  final OrgMembershipMapper mapper = new OrgMembershipMapper();
 
-
     @Override
     @Transactional(readOnly = true)
     public Page<OrgMembershipDto> listInTenant(MemberSearchRequest req, Pageable pageable) {
         UUID orgId = requireTenant();
-        Page<OrgMembership> page = memberships.searchInOrg(
+        return memberships.searchInOrg(
                 orgId,
-                req.getQ(),
-                req.getRoleName(),
-                req.getEnabled(),
+                QueryUtils.normalize(req != null ? req.getQ() : null),
+                req != null ? req.getRoleName() : null,
+                req != null ? req.getEnabled() : null,
                 pageable
-        );
-        return page.map(mapper::toDTO);
+        ).map(mapper::toDTO);
     }
+
 
     @Override
     public OrgMembershipDto addMemberInTenant(MembershipCreateRequest req) {

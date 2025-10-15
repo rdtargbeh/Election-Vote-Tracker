@@ -2,7 +2,9 @@ package Backend.ElectionVote.mapper;
 
 import Backend.ElectionVote.dto.OrgMembershipDto;
 import Backend.ElectionVote.entity.OrgMembership;
+import org.springframework.stereotype.Component;
 
+@Component
 public class OrgMembershipMapper {
 
     public OrgMembershipDto toDTO(OrgMembership m) {
