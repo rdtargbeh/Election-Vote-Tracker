@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,8 +23,16 @@ public class AuthorizationServiceImpl implements AuthorizationService {
 
     @Override
     public OrgMembership requireMembership() {
-        UUID orgId  = requireTenant();
-        UUID userId = requireUser();
+        TenantContext ctx = TenantContext.get();
+        if (ctx == null) throw new AccessDeniedException("Tenant context missing");
+
+        if (ctx.isSystemAdmin()) {
+            return OrgMembership.systemAdmin(ctx.userId().orElse(null), ctx.orgId().orElse(null));
+        }
+
+        UUID orgId = ctx.orgId().orElseThrow(() -> new AccessDeniedException("Tenant required"));
+        UUID userId = Optional.ofNullable(currentUser.currentUserId())
+                .orElseThrow(() -> new AccessDeniedException("Authentication required"));
 
         return memberships.findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(orgId, userId)
                 .orElseThrow(() -> new AccessDeniedException("Not a member of this organization or membership disabled"));
@@ -32,6 +41,7 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     @Override
     public OrgMembership requireAny(String... roleNames) {
         OrgMembership m = requireMembership();
+        if (m.isSystemAdmin()) return m;
         if (roleNames == null || roleNames.length == 0) return m;
 
         String have = m.getRoleName();
@@ -49,22 +59,11 @@ public class AuthorizationServiceImpl implements AuthorizationService {
 
     @Override
     public Set<String> currentRoles() {
-        // Single per-org role in this design
-        try { return Set.of(requireMembership().getRoleName()); }
-        catch (AccessDeniedException e) { return Set.of(); }
-    }
-
-    /* ----------------------- helpers ----------------------- */
-
-    private UUID requireTenant() {
-        UUID orgId = TenantContext.get();
-        if (orgId == null) throw new AccessDeniedException("Tenant required");
-        return orgId;
-    }
-
-    private UUID requireUser() {
-        UUID userId = currentUser.currentUserId();
-        if (userId == null) throw new AccessDeniedException("Authentication required");
-        return userId;
+        try {
+            OrgMembership m = requireMembership();
+            return m.isSystemAdmin() ? Set.of("SYSTEM_ADMIN") : Set.of(m.getRoleName());
+        } catch (AccessDeniedException e) {
+            return Set.of();
+        }
     }
 }

@@ -4,5 +4,5 @@ public enum ElectionType {
     PRESIDENTIAL,
     LEGISLATIVE,
     REFERENDUM,
-    GENERAL
+    PRESIDENTIAL_GENERAL
 }

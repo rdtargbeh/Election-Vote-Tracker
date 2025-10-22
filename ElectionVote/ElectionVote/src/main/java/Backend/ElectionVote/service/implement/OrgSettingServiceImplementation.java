@@ -9,8 +9,10 @@ import Backend.ElectionVote.service.OrgSettingService;
 import Backend.ElectionVote.uility.OrgSettingDefaults;
 import Backend.ElectionVote.uility.OrgSettingKeys;
 import Backend.ElectionVote.uility.TenantContext;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
@@ -18,6 +20,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 
+@Service                      // <-- critical so Spring creates the bean
+@RequiredArgsConstructor
+@Transactional
 public class OrgSettingServiceImplementation implements OrgSettingService {
 
    @Autowired
@@ -62,10 +67,12 @@ public class OrgSettingServiceImplementation implements OrgSettingService {
     /* ---------- helpers ---------- */
 
     private UUID requireTenant() {
-        UUID orgId = TenantContext.get();
+        TenantContext ctx = TenantContext.get();
+        UUID orgId = (ctx != null && ctx.orgId().isPresent()) ? ctx.orgId().get() : null;
         if (orgId == null) throw new IllegalStateException("X-Org-Id is required");
         return orgId;
     }
+
 
     private OrgSetting buildTransientDefault(UUID orgId) {
         OrgSetting s = new OrgSetting();

@@ -54,7 +54,7 @@ public class OrgMembership {
      * The table uses {@code org_id}, so we fix it here to match the DDL.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ord_id", nullable = false, foreignKey = @ForeignKey(name = "fk_membership_org"))
+    @JoinColumn(name = "org_id", nullable = false, foreignKey = @ForeignKey(name = "fk_membership_org"))
     private Organization organization;
 
     /** User who is a member of the organization. */
@@ -74,6 +74,47 @@ public class OrgMembership {
     private  boolean isEnabled = true;
 
 
+    /* -------------------- non-persistent helpers -------------------- */
+
+    /** Mark “fabricated” memberships (e.g., system admin bypass) that aren’t persisted. */
+    @Transient
+    private boolean synthetic;
+
+    /** Convenience ID getters (avoid lazy loads) */
+    @Transient
+    public UUID getOrganizationId() { return organization != null ? organization.getOrgId() : null; }
+    @Transient
+    public UUID getUserId()         { return user != null ? user.getUserId() : null; }
+
+
+    /** System-admin role check used in AuthorizationService */
+    @Transient
+    public boolean isSystemAdmin() { return "SYSTEM_ADMIN".equalsIgnoreCase(this.roleName); }
+
+    public boolean isSynthetic() { return synthetic; }
+    public void setSynthetic(boolean synthetic) { this.synthetic = synthetic; }
+
+    /** Factory: build a synthetic “system admin” membership for the current request context. */
+    public static OrgMembership systemAdmin(UUID userId, UUID actingOrgId) {
+        OrgMembership m = new OrgMembership();
+        m.setRoleName("SYSTEM_ADMIN");
+        m.setEnabled(true);
+        m.setSynthetic(true);
+
+        if (userId != null) {
+            SystemUser u = new SystemUser();
+            u.setUserId(userId);           // id-only stub
+            m.setUser(u);
+        }
+        if (actingOrgId != null) {
+            Organization o = new Organization();
+            o.setOrgId(actingOrgId);       // id-only stub
+            m.setOrganization(o);
+        }
+        return m;
+    }
+
+
     // ---------------------------------------------------------------------
     // Equality: use primary key when available; fallback to business key
     // -------
@@ -83,20 +124,20 @@ public class OrgMembership {
         if (this == o) return true;
         if (!(o instanceof OrgMembership that)) return false;
 
-        // Prefer PK if both are persisted
         if (membershipId != null && that.membershipId != null) {
             return membershipId.equals(that.membershipId);
         }
-        // Fallback: composite unique (org_id, user_id)
-        return Objects.equals(organization, that.organization)
-                && Objects.equals(user, that.user);
+        // fallback: compare by business key (org_id, user_id) without initializing proxies
+        return Objects.equals(getOrganizationId(), that.getOrganizationId()) &&
+                Objects.equals(getUserId(), that.getUserId());
     }
 
     @Override
     public int hashCode() {
         if (membershipId != null) return membershipId.hashCode();
-        return Objects.hash(organization, user);
+        return Objects.hash(getOrganizationId(), getUserId());
     }
+
 
     @Override
     public String toString() {
@@ -111,4 +152,6 @@ public class OrgMembership {
                 ", enabled=" + isEnabled +
                 '}';
     }
+
+
 }

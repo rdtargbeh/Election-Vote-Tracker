@@ -9,10 +9,12 @@ import Backend.ElectionVote.mapper.UserRoleMapper;
 import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.repository.UserRoleRepository;
 import Backend.ElectionVote.service.UserRoleService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.NoSuchElementException;
@@ -20,6 +22,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+@Service                                  // <-- critical annotation
+@RequiredArgsConstructor
+@Transactional
 public class UserRoleServiceImplementation implements UserRoleService {
 
     @Autowired
@@ -85,7 +90,7 @@ public class UserRoleServiceImplementation implements UserRoleService {
             throw new IllegalArgumentException("Cannot delete core role: " + role.getRoleName());
         }
 
-        long inUse = userRoleRepository.countByRole_RoleId(roleId);
+        long inUse = userRoleRepository.countByRoleId(roleId);
         if (inUse > 0) {
             throw new IllegalStateException("Cannot delete role that is assigned to users (" + inUse + ")");
         }

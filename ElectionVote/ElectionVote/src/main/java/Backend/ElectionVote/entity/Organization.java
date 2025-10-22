@@ -2,6 +2,7 @@ package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.OrganizationType;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -30,7 +31,7 @@ public class Organization {
     @Column(name = "org_id", nullable = false, updatable = false)
     private UUID orgId;
 
-    @BatchSize(size = 120)
+    @Size(max = 120)
     @Column(name = "org_name", nullable = false, length = 100)
     private String orgName;
 
@@ -47,7 +48,7 @@ public class Organization {
     @Column(name = "logo_url")
     private String logoUrl;
 
-    @BatchSize(size = 9) // e.g., "#0A84FF" or rgba/short hex if you choose
+    @Size(max = 20) // e.g., "#0A84FF" or rgba/short hex if you choose
     @Column(name = "primary_color", length = 9)
     private String primaryColor;
 

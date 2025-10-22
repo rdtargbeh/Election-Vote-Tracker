@@ -8,12 +8,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.jboss.logging.MDC;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -35,93 +39,88 @@ import java.util.UUID;
 public class TenantFilter extends OncePerRequestFilter {
 
     private static final String TENANT_HEADER = "X-Org-Id";
-    private static final boolean FAIL_ON_MISSING = false; // set true if you want early 400 for tenant APIs
-
-    private final OrganizationRepository organizations;
+    private final ObjectProvider<OrganizationRepository> organizationsProvider;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Skip for CORS preflight and optionally for public endpoints
-        String method = request.getMethod();
-        if ("OPTIONS".equalsIgnoreCase(method)) return true;
-
-        String path = request.getRequestURI();
-        // Allow public endpoints without tenant (adjust as needed)
-        if (path.startsWith("/public/") || path.startsWith("/actuator")) return true;
-        // static resources
-        if (path.startsWith("/favicon") || path.startsWith("/assets") || path.startsWith("/static")) return true;
-
-        return false;
+        String m = request.getMethod();
+        if ("OPTIONS".equalsIgnoreCase(m)) return true;
+        String p = request.getRequestURI();
+        return p.startsWith("/public/") || p.startsWith("/actuator")
+                || p.startsWith("/favicon") || p.startsWith("/assets") || p.startsWith("/static");
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain chain) throws ServletException, IOException {
-        UUID resolved = null;
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+
+        UUID orgId = resolveOrg(req);
+        boolean isSystemAdmin = resolveSystemAdmin();
+
         try {
-            // 1) Prefer explicit header
-            String orgHeader = request.getHeader(TENANT_HEADER);
-
-            if (orgHeader != null && !orgHeader.isBlank()) {
-                try {
-                    UUID orgId = UUID.fromString(orgHeader.trim());
-                    // Ensure org exists and is active
-                    boolean exists = organizations.existsById(orgId);
-                    if (exists) {
-                        resolved = orgId;
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    // Not a UUID; fall through to subdomain (if enabled)
-                }
-            }
-
-            // 2) Optional: derive from subdomain if header missing/invalid
-            if (resolved == null) {
-                String host = request.getServerName(); // e.g., cdc.app.example.com
-                String sub = deriveSubdomain(host);
-                if (sub != null) {
-                    resolved = organizations.findBySubdomainIgnoreCase(sub)
-                            .filter(o -> o.isActive()) // only active tenants
-                            .map(o -> o.getOrgId())
-                            .orElse(null);
-                }
-            }
-
-            if (resolved != null) {
-                TenantContext.set(resolved);
-                MDC.put("orgId", resolved.toString()); // useful in logs
-            } else if (FAIL_ON_MISSING) {
-                response.sendError(HttpServletResponse.SC_BAD_REQUEST, "X-Org-Id is required");
-                return;
-            }
-
-            chain.doFilter(request, response);
-
+            // set userId here only if you parse it from SecurityContext/JWT; null is fine too.
+            TenantContext.set(null, orgId, isSystemAdmin);
+            if (orgId != null) MDC.put("orgId", orgId.toString());
+            MDC.put("isSystemAdmin", Boolean.toString(isSystemAdmin));
+            chain.doFilter(req, res);
         } finally {
             TenantContext.clear();
             MDC.remove("orgId");
+            MDC.remove("isSystemAdmin");
         }
     }
 
-    /**
-     * Extract subdomain from host. Customize for your domain shape.
-     * Examples:
-     *  - "cdc.example.com" -> "cdc"
-     *  - "app.internal.local" -> null (if you only use header in non-subdomain envs)
-     */
-    private String deriveSubdomain(String host) {
-        if (host == null || host.isBlank()) return null;
-        // naive split: take first label if there are 3+ labels (sub + domain + tld)
-        String[] labels = host.split("\\.");
-        if (labels.length >= 3) {
-            String first = labels[0];
-            // optionally ignore "www"
-            if ("www".equalsIgnoreCase(first)) return null;
-            return first;
+    private UUID resolveOrg(HttpServletRequest req) {
+        UUID fromHeader = parseUuidOrNull(req.getHeader(TENANT_HEADER));
+        if (fromHeader != null) {
+            OrganizationRepository repo = organizationsProvider.getIfAvailable();
+            return (repo != null && repo.existsByOrgIdAndIsActiveTrue(fromHeader)) ? fromHeader : null;
+        }
+        String sub = deriveSubdomain(req.getServerName());
+        if (sub != null) {
+            OrganizationRepository repo = organizationsProvider.getIfAvailable();
+            if (repo != null) {
+                return repo.findIdBySubdomainIgnoreCaseAndIsActiveTrue(sub).orElse(null);
+            }
         }
         return null;
     }
 
+    private boolean resolveSystemAdmin() {
+        Authentication a = SecurityContextHolder.getContext().getAuthentication();
+        if (a == null || !a.isAuthenticated()) return false;
+        if (a.getAuthorities().stream().anyMatch(au -> "ROLE_SYSTEM_ADMIN".equalsIgnoreCase(au.getAuthority()))) return true;
 
+        Object principal = a.getPrincipal();
+        try {
+            var m = principal.getClass().getMethod("getClaims");
+            Object claimsObj = m.invoke(principal);
+            if (claimsObj instanceof Map<?,?> claims) {
+                Object v = claims.get("isSystemAdmin");
+                if (v instanceof Boolean b) return b;
+                if (v instanceof String s) return Boolean.parseBoolean(s);
+            }
+        } catch (Exception ignored) {}
+        if (principal instanceof Map<?,?> claims) {
+            Object v = claims.get("isSystemAdmin");
+            if (v instanceof Boolean b) return b;
+            if (v instanceof String s) return Boolean.parseBoolean(s);
+        }
+        return false;
+    }
+
+    private UUID parseUuidOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return UUID.fromString(s.trim()); } catch (Exception e) { return null; }
+    }
+
+    private String deriveSubdomain(String host) {
+        if (host == null || host.isBlank()) return null;
+        String[] labels = host.split("\\.");
+        if (labels.length >= 3) {
+            String first = labels[0];
+            if (!"www".equalsIgnoreCase(first)) return first;
+        }
+        return null;
+    }
 }

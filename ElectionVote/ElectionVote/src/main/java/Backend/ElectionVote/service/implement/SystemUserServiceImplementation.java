@@ -7,12 +7,13 @@ import Backend.ElectionVote.entity.*;
 import Backend.ElectionVote.enums.RoleName;
 import Backend.ElectionVote.mapper.UserMapper;
 import Backend.ElectionVote.repository.*;
+import Backend.ElectionVote.security.CurrentUserProvider;
 import Backend.ElectionVote.service.SystemUserService;
 import Backend.ElectionVote.uility.ChangePasswordRequest;
 import Backend.ElectionVote.uility.QueryUtils;
 import Backend.ElectionVote.uility.TenantContext;
 import Backend.ElectionVote.uility.UserSearchRequest;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,33 +26,24 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-@Transactional
+@Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class SystemUserServiceImplementation implements SystemUserService {
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_MINUTES        = 30;
 
-    @Autowired
-    private  SystemUserRepository systemUserRepository;
-    @Autowired
-    private  UserRoleRepository userRoleRepository;
-    @Autowired
-    private  PartyRepository partyRepository;
-    @Autowired
-    private  CountyRepository countyRepository;
-    @Autowired
-    private  OrganizationRepository organizationRepository;
-    @Autowired
-    private  OrgMembershipRepository memberships;
-    @Autowired
-    private  PasswordEncoder encoder;
-    private final UserMapper mapper = new UserMapper();
+    private final SystemUserRepository systemUserRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final PartyRepository partyRepository;
+    private final CountyRepository countyRepository;
+    private final OrganizationRepository organizationRepository;
+    private final OrgMembershipRepository memberships;
+    private final PasswordEncoder encoder;
+    private final UserMapper mapper; // make this a @Component or MapStruct @Mapper(componentModel="spring")
+    private final CurrentUserProvider currentUserProvider;
 
-
-/* ============================================================
-       Core CRUD / Query (Tenant-scoped)
-       ============================================================ */
-
+    /* ======================= CREATE ======================= */
 
     @Override
     @Transactional
@@ -61,57 +53,45 @@ public class SystemUserServiceImplementation implements SystemUserService {
         Organization tenant = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new NoSuchElementException("Organization not found"));
 
-        // global uniqueness per schema
         ensureUniqueEmail(req.getEmail(), null);
         ensureUniqueUsername(req.getUserName(), null);
 
-        // role required & allowed
         UserRole role = loadRole(req.getRoleName());
         if (role.getRoleName() == RoleName.ADMIN && !callerIsPlatformAdmin()) {
             throw new IllegalArgumentException("Not allowed to create ADMIN within a tenant");
         }
 
-        // ------- optional relations -------
-        // Party: if not provided, fall back to tenant's linked party (if any)
+        // Party: explicit request value else fallback to tenant party
         Party party = (req.getPartyId() != null)
                 ? loadParty(req.getPartyId())
-                : (tenant.getParty() != null ? tenant.getParty() : null);
+                : tenant.getParty();
 
-        // County: only if provided
-        County county = (req.getAssignedCountyId() != null)
-                ? loadCounty(req.getAssignedCountyId())
-                : null;
+        County county = (req.getAssignedCountyId() != null) ? loadCounty(req.getAssignedCountyId()) : null;
 
-        // Default org: explicit from request, else current tenant
-        Organization defaultOrg = (req.getDefaultOrgId() != null)
-                ? loadOrg(req.getDefaultOrgId())
-                : tenant;
+        Organization defaultOrg = (req.getDefaultOrgId() != null) ? loadOrg(req.getDefaultOrgId()) : tenant;
 
         String encoded = encoder.encode(req.getPassword());
-
-        // NOTE: make sure your mapper has an overload that accepts UserCreateRequest (or rename to CreateUserRequest)
         SystemUser entity = mapper.toEntity(req, role, party, county, defaultOrg, encoded);
         SystemUser saved  = systemUserRepository.save(entity);
 
-        // membership in current tenant (relation-based repo methods)
         ensureMembership(orgId, saved.getUserId(), role.getRoleName().name());
 
         return toDto(saved);
     }
 
+    /* ======================= READ ======================= */
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<UserDto> getInTenant(UUID userId) {
         UUID orgId = requireTenant();
-        if (!memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
+        if (!callerIsPlatformAdmin()
+                && !memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
             return Optional.empty();
         }
         return systemUserRepository.findById(userId).map(this::toDto);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Page<UserDto> searchInTenant(UserSearchRequest req, Pageable pageable) {
         UUID orgId = requireTenant();
         return systemUserRepository
@@ -124,52 +104,50 @@ public class SystemUserServiceImplementation implements SystemUserService {
                 .map(this::toDto);
     }
 
+    /* ======================= UPDATE ======================= */
 
     @Override
+    @Transactional
     public UserDto updateInTenant(UUID userId, UserUpdateRequest req) {
         UUID orgId = requireTenant();
-        SystemUser u = loadTenantUser(orgId, userId);
+        SystemUser u = loadTenantUser(orgId, userId); // respects admin bypass
 
-        // uniqueness if changed
-        if (!u.getEmail().equalsIgnoreCase(req.getEmail())) {
+        if (req.getEmail() != null && !u.getEmail().equalsIgnoreCase(req.getEmail())) {
             ensureUniqueEmail(req.getEmail(), u.getUserId());
         }
-        if (!u.getUserName().equalsIgnoreCase(req.getUserName())) {
+        if (req.getUserName() != null && !u.getUserName().equalsIgnoreCase(req.getUserName())) {
             ensureUniqueUsername(req.getUserName(), u.getUserId());
         }
 
-        // scalar updates
         mapper.applyUpdate(req, u);
 
-        // relations (optional in update request)
         if (req.getRoleName() != null) {
             UserRole role = loadRole(req.getRoleName());
             if (role.getRoleName() == RoleName.ADMIN && !callerIsPlatformAdmin()) {
                 throw new IllegalArgumentException("Not allowed to assign ADMIN within a tenant");
             }
             u.setRole(role);
-            // keep membership role text in sync for this org if needed
             syncMembershipRole(orgId, userId, role.getRoleName().name());
         }
+
+        // NOTE: with current DTO shape, null means “not provided”, so you can set but not clear.
         if (req.getPartyId() != null) {
-            u.setParty(req.getPartyId() == null ? null : loadParty(req.getPartyId()));
+            u.setParty(loadParty(req.getPartyId()));
         }
         if (req.getAssignedCountyId() != null) {
-            u.setAssignedCounty(req.getAssignedCountyId() == null ? null : loadCounty(req.getAssignedCountyId()));
+            u.setAssignedCounty(loadCounty(req.getAssignedCountyId()));
         }
         if (req.getDefaultOrgId() != null) {
-            u.setDefaultOrg(req.getDefaultOrgId() == null ? null : loadOrg(req.getDefaultOrgId()));
+            u.setDefaultOrg(loadOrg(req.getDefaultOrgId()));
         }
 
         return toDto(u);
     }
 
-
-    /* ============================================================
-       Status Flags
-       ============================================================ */
+    /* ======================= FLAGS ======================= */
 
     @Override
+    @Transactional
     public void setActiveInTenant(UUID userId, boolean active) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -177,6 +155,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void setVerifiedInTenant(UUID userId, boolean verified) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -187,24 +166,26 @@ public class SystemUserServiceImplementation implements SystemUserService {
         }
     }
 
-
-    /* ============================================================
-       Credentials & Security
-       ============================================================ */
+    /* ======================= CREDENTIALS ======================= */
 
     @Override
+    @Transactional
     public void changePassword(UUID userId, ChangePasswordRequest req) {
-        // user changes their own password (no tenant check necessary if you enforce in controller),
-        // but we’ll still guard by membership if TenantContext is present
-        UUID orgId = TenantContext.get();
-        if (orgId != null && !memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
+        // Optional tenant guard if context present and caller isn’t platform admin
+        TenantContext ctx = TenantContext.get();
+        UUID orgId = (ctx != null) ? ctx.orgId().orElse(null) : null;
+        if (orgId != null && !callerIsPlatformAdmin()
+                && !memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
             throw new IllegalArgumentException("Not in current tenant");
         }
 
-        SystemUser u = systemUserRepository.findById(userId).orElseThrow(() -> new NoSuchElementException("User not found"));
+        SystemUser u = systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
         if (!encoder.matches(req.getCurrentPassword(), u.getPasswordHash())) {
             throw new IllegalArgumentException("Current password is incorrect");
         }
+
         u.setPasswordHash(encoder.encode(req.getNewPassword()));
         u.setLastPasswordChange(LocalDateTime.now());
         u.setFailedLoginAttempts(0);
@@ -212,6 +193,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void adminResetPasswordInTenant(UUID userId, String newPassword) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -222,6 +204,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void setLockInTenant(UUID userId, boolean lock, LocalDateTime until) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -234,8 +217,8 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void recordLoginFailure(UUID userId) {
-        // Called by auth flow; no-op if user not found
         systemUserRepository.findById(userId).ifPresent(u -> {
             u.setFailedLoginAttempts(u.getFailedLoginAttempts() + 1);
             if (u.getFailedLoginAttempts() >= MAX_FAILED_ATTEMPTS) {
@@ -245,6 +228,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void recordLoginSuccess(UUID userId) {
         systemUserRepository.findById(userId).ifPresent(u -> {
             u.setLastLogin(LocalDateTime.now());
@@ -253,12 +237,10 @@ public class SystemUserServiceImplementation implements SystemUserService {
         });
     }
 
-
-    /* ============================================================
-       Role & Affiliations
-       ============================================================ */
+    /* ======================= ROLES & AFFILIATIONS ======================= */
 
     @Override
+    @Transactional
     public void assignRoleInTenant(UUID userId, RoleName roleName) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -271,13 +253,15 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void assignPartyInTenant(UUID userId, UUID partyId) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
-        u.setParty(partyId == null ? null : loadParty(partyId));
+        u.setParty(partyId == null ? null : loadParty(partyId)); // can clear here
     }
 
     @Override
+    @Transactional
     public void assignCountyInTenant(UUID userId, UUID countyId) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
@@ -285,6 +269,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
     @Override
+    @Transactional
     public void setDefaultOrgInTenant(UUID userId, UUID orgId) {
         UUID current = requireTenant();
         SystemUser u = loadTenantUser(current, userId);
@@ -292,27 +277,38 @@ public class SystemUserServiceImplementation implements SystemUserService {
             u.setDefaultOrg(null);
         } else {
             Organization o = loadOrg(orgId);
-            // optional safety: ensure the user is member of that org too
             u.setDefaultOrg(o);
         }
     }
 
-
-    /* ============================================================
-       Helpers
-       ============================================================ */
+    /* ======================= HELPERS ======================= */
 
     private UUID requireTenant() {
-        UUID orgId = TenantContext.get();
-        if (orgId == null) throw new IllegalStateException("X-Org-Id is required");
-        return orgId;
+        TenantContext c = TenantContext.get();
+        UUID orgId = (c != null) ? c.orgId().orElse(null) : null;
+        if (orgId == null && !callerIsPlatformAdmin()) {
+            throw new IllegalStateException("X-Org-Id is required");
+        }
+        return orgId; // may be null for platform admin operations
     }
 
     private SystemUser loadTenantUser(UUID orgId, UUID userId) {
-        if (!memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
-            throw new IllegalArgumentException("User not in current tenant");
+        if (!callerIsPlatformAdmin()) {
+            if (orgId == null) throw new IllegalStateException("X-Org-Id is required");
+            if (!memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
+                throw new IllegalArgumentException("User not in current tenant");
+            }
         }
-        return systemUserRepository.findById(userId).orElseThrow(() -> new NoSuchElementException("User not found"));
+        return systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+    }
+
+    private boolean callerIsPlatformAdmin() {
+        UUID me = currentUserProvider.currentUserId();
+        if (me == null) return false;
+        return systemUserRepository.findById(me)
+                .map(SystemUser::isSystemAdmin)
+                .orElse(false);
     }
 
     private void ensureUniqueEmail(String email, UUID excludeUserId) {
@@ -335,20 +331,19 @@ public class SystemUserServiceImplementation implements SystemUserService {
         return userRoleRepository.findByRoleName(roleName)
                 .orElseThrow(() -> new NoSuchElementException("Role not found: " + roleName));
     }
-
     private Party loadParty(UUID partyId) {
         return partyRepository.findById(partyId)
-                .orElseThrow(() -> new NoSuchElementException("Party not found"));
+                .orElseThrow(() -> new NoSuchElementException("Party not found: " + partyId));
     }
 
     private County loadCounty(UUID countyId) {
         return countyRepository.findById(countyId)
-                .orElseThrow(() -> new NoSuchElementException("County not found"));
+                .orElseThrow(() -> new NoSuchElementException("County not found: " + countyId));
     }
 
     private Organization loadOrg(UUID orgId) {
         return organizationRepository.findById(orgId)
-                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
+                .orElseThrow(() -> new NoSuchElementException("Organization not found: " + orgId));
     }
 
     private void ensureMembership(UUID orgId, UUID userId, String roleNameText) {
@@ -362,23 +357,16 @@ public class SystemUserServiceImplementation implements SystemUserService {
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
 
         OrgMembership m = new OrgMembership();
-        m.setOrganization(org);         // set relations, not IDs
+        m.setOrganization(org);
         m.setUser(user);
         m.setRoleName(roleNameText);
         m.setEnabled(true);
         memberships.save(m);
     }
 
-
     private void syncMembershipRole(UUID orgId, UUID userId, String roleNameText) {
         memberships.findByOrganization_OrgIdAndUser_UserId(orgId, userId)
                 .ifPresent(m -> m.setRoleName(roleNameText));
-    }
-
-
-    private boolean callerIsPlatformAdmin() {
-        // TODO: integrate Spring Security authorities
-        return false;
     }
 
     private UserDto toDto(SystemUser user) {
@@ -399,4 +387,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
         dto.setDateCreated(user.getDateCreated());
         return dto;
     }
+
 }
+
+

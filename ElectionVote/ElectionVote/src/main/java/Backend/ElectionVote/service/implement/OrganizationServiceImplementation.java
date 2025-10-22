@@ -5,12 +5,14 @@ import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
 import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.Party;
+import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.mapper.OrganizationMapper;
 import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.PartyRepository;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.uility.OrganizationSearchRequest;
 import Backend.ElectionVote.uility.QueryUtils;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,7 +24,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-@Transactional
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class OrganizationServiceImplementation implements OrganizationService {
 
     @Autowired
@@ -34,15 +37,18 @@ public class OrganizationServiceImplementation implements OrganizationService {
 
 
     @Override
+    @Transactional // write Tx
     public OrganizationDto create(OrganizationCreateRequest req) {
-        // subdomain unique if provided
-        if (req.getSubdomain() != null && !req.getSubdomain().isBlank()) {
-            if (organizationRepository.existsBySubdomainIgnoreCase(req.getSubdomain())) {
+        // normalize
+        String sub = normalizeSubdomain(req.getSubdomain());
+        if (sub != null) {
+            // case-insensitive uniqueness
+            if (organizationRepository.existsBySubdomainIgnoreCase(sub)) {
                 throw new IllegalArgumentException("Subdomain already in use");
             }
         }
-
         Organization org = mapper.toEntity(req);
+        org.setSubdomain(sub); // ensure normalized value is persisted
 
         // attach party if provided
         if (req.getPartyId() != null) {
@@ -50,7 +56,6 @@ public class OrganizationServiceImplementation implements OrganizationService {
                     .orElseThrow(() -> new NoSuchElementException("Party not found"));
             org.setParty(p);
         }
-
         Organization saved = organizationRepository.save(org);
         return mapper.toDTO(saved);
     }
@@ -62,71 +67,85 @@ public class OrganizationServiceImplementation implements OrganizationService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Optional<OrganizationDto> getBySubdomain(String subdomain) {
-        if (subdomain == null || subdomain.isBlank()) return Optional.empty();
-        return organizationRepository.findBySubdomainIgnoreCase(subdomain).map(mapper::toDTO);
+        String sub = normalizeSubdomain(subdomain);
+        if (sub == null) return Optional.empty();
+        return organizationRepository.findBySubdomainIgnoreCase(sub).map(mapper::toDTO);
     }
 
+
     @Override
-    @Transactional(readOnly = true)
     public Page<OrganizationDto> search(OrganizationSearchRequest req, Pageable pageable) {
-        return organizationRepository
-                .search(
-                        QueryUtils.normalize(req != null ? req.getQ() : null),
-                        req != null ? req.getActive() : null,
-                        req != null ? req.getType()   : null,
-                        pageable
-                )
+        String q = QueryUtils.normalize(req != null ? req.getQ() : null);
+        Boolean active = (req != null) ? req.getActive() : null;
+        OrganizationType type = (req != null) ? req.getType() : null; // <-- enum, not String
+        return organizationRepository.search(q, active, type, pageable)
                 .map(mapper::toDTO);
     }
 
 
     @Override
+    @Transactional // write Tx
     public OrganizationDto update(UUID orgId, OrganizationUpdateRequest req) {
-        Organization org = organizationRepository.findById(orgId).orElseThrow(() -> new NoSuchElementException("Organization not found"));
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
 
-        // subdomain uniqueness when changed
+        // subdomain: only validate when the client sent a value (including blank)
         if (req.getSubdomain() != null) {
-            String sub = req.getSubdomain();
-            if (sub != null && !sub.isBlank()) {
+            String sub = normalizeSubdomain(req.getSubdomain());
+            if (sub != null) {
                 if (organizationRepository.existsBySubdomainIgnoreCaseAndOrgIdNot(sub, orgId)) {
                     throw new IllegalArgumentException("Subdomain already in use");
                 }
             }
+            org.setSubdomain(sub); // may be null to clear
         }
-
-        // apply scalars
+        // apply scalar changes via mapper (safe fields only)
         mapper.apply(req, org);
 
-        // handle party relation changes
+        // PARTY: make this tri-state to avoid the “null means clear or missing?” ambiguity.
+        // Best DTO shape: Optional<UUID> partyId in OrganizationUpdateRequest
         if (req.getPartyId() != null) {
-            if (req.getPartyId() == null) {
+            // Treat explicit null as CLEAR; non-null as set
+            UUID partyId = req.getPartyId();
+            if (partyId == null) {
                 org.setParty(null);
             } else {
-                Party p = partyRepository.findById(req.getPartyId())
+                Party p = partyRepository.findById(partyId)
                         .orElseThrow(() -> new NoSuchElementException("Party not found"));
                 org.setParty(p);
             }
         }
-
-        return mapper.toDTO(org);
+        // else: do not touch party if field absent
+        Organization saved = organizationRepository.save(org);
+        return mapper.toDTO(saved);
     }
 
     @Override
+    @Transactional
     public void setActive(UUID orgId, boolean active) {
-        Organization org = organizationRepository.findById(orgId).orElseThrow(() -> new NoSuchElementException("Organization not found"));
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
         org.setActive(active);
     }
 
     @Override
+    @Transactional
     public void assignParty(UUID orgId, UUID partyId) {
-        Organization org = organizationRepository.findById(orgId).orElseThrow(() -> new NoSuchElementException("Organization not found"));
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
         if (partyId == null) {
             org.setParty(null);
         } else {
-            Party p = partyRepository.findById(partyId).orElseThrow(() -> new NoSuchElementException("Party not found"));
+            Party p = partyRepository.findById(partyId)
+                    .orElseThrow(() -> new NoSuchElementException("Party not found"));
             org.setParty(p);
         }
+    }
+
+    private String normalizeSubdomain(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim().toLowerCase();
+        return s.isBlank() ? null : s;
     }
 }

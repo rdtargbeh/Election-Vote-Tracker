@@ -99,8 +99,11 @@ public class OrgMembershipServiceImplementation implements OrgMembershipService 
     /* ---------------- helpers ---------------- */
 
     private UUID requireTenant() {
-        UUID orgId = TenantContext.get();
+        TenantContext ctx = TenantContext.get();
+        UUID orgId = (ctx != null && ctx.orgId().isPresent()) ? ctx.orgId().get() : null;
         if (orgId == null) throw new IllegalStateException("X-Org-Id is required");
         return orgId;
     }
+
+
 }

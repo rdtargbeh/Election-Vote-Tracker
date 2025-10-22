@@ -80,6 +80,9 @@ public class SystemUser {
     @Column(name = "is_verified", nullable = false)
     private boolean isVerified = false;
 
+    @Column(name = "is_system_admin", nullable = false)
+    private boolean isSystemAdmin;  // maps to SQL boolean column
+
     /** Audit fields **/
     @Column(name = "last_login")
     private LocalDateTime lastLogin;

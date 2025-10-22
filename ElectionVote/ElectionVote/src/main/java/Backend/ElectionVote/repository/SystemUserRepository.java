@@ -16,7 +16,12 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
     Optional<SystemUser> findByEmailIgnoreCase(String email);
     Optional<SystemUser> findByUserNameIgnoreCase(String userName);
 
+    @Query("select coalesce(su.isSystemAdmin, false) from SystemUser su where su.userId = ?1")
+    boolean isSystemAdmin(UUID userId);
+
+
     boolean existsByEmailIgnoreCase(String email);
+
     boolean existsByUserNameIgnoreCase(String userName);
 
 
@@ -47,7 +52,7 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
        from OrgMembership m
        join m.user u
        where m.organization.orgId = :org
-         and m.enabled = true
+         and m.isEnabled = true
          and (:q is null or
               lower(u.firstName) like lower(concat('%', :q, '%')) or
               lower(u.lastName)  like lower(concat('%', :q, '%')) or

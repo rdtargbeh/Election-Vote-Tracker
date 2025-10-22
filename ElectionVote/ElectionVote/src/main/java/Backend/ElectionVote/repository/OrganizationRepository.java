@@ -23,6 +23,11 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     boolean existsByOrgIdAndIsActiveTrue(UUID orgId);
 
+
+    @Query("select o.orgId from Organization o where lower(o.subdomain) = lower(?1) and o.isActive = true")
+    Optional<UUID> findIdBySubdomainIgnoreCaseAndIsActiveTrue(String subdomain);
+
+
     @Query("""
            select o from Organization o
            where (:q is null or lower(o.orgName) like lower(concat('%', :q, '%'))
@@ -34,4 +39,10 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
                               @Param("active") Boolean active,
                               @Param("type") OrganizationType type,
                               Pageable pageable);
+
+
+
+
+
+
 }
