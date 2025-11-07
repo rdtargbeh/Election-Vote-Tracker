@@ -1,6 +1,6 @@
 package Backend.ElectionVote.security;
 
-import Backend.ElectionVote.uility.TenantContext;
+import Backend.ElectionVote.utility.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;

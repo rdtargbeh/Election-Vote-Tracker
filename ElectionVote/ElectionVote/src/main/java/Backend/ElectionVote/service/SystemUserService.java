@@ -4,9 +4,8 @@ import Backend.ElectionVote.dto.UserCreateRequest;
 import Backend.ElectionVote.dto.UserDto;
 import Backend.ElectionVote.dto.UserUpdateRequest;
 import Backend.ElectionVote.enums.RoleName;
-import Backend.ElectionVote.uility.ChangePasswordRequest;
-import Backend.ElectionVote.uility.UserSearchRequest;
-import jakarta.annotation.Nullable;
+import Backend.ElectionVote.utility.ChangePasswordRequest;
+import Backend.ElectionVote.utility.UserSearchRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

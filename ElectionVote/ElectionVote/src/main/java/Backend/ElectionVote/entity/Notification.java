@@ -1,9 +1,12 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.enums.NotificationPriority;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import static Backend.ElectionVote.enums.NotificationPriority.NORMAL;
 
 @Entity
 @Table(name = "notification")
@@ -69,7 +72,7 @@ public class Notification {
 
     /** Priority: LOW, NORMAL, HIGH, CRITICAL */
     @Column(name = "priority", length = 20)
-    private String priority = "NORMAL";
+    private NotificationPriority priority = NotificationPriority.NORMAL;
 
     /** Delivery channel: IN_APP, EMAIL, SMS, SYSTEM */
     @Column(name = "delivery_method", length = 30)

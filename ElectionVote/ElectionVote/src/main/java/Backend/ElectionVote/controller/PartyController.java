@@ -4,9 +4,10 @@ import Backend.ElectionVote.dto.PartyCreateRequest;
 import Backend.ElectionVote.dto.PartyDto;
 import Backend.ElectionVote.dto.PartyUpdateRequest;
 import Backend.ElectionVote.service.PartyService;
-import Backend.ElectionVote.uility.PartySearchRequest;
+import Backend.ElectionVote.utility.PartySearchRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,7 +23,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PartyController {
 
-    private final PartyService partyService;
+    @Autowired
+    private PartyService partyService;
 
     @PostMapping
     public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
@@ -44,7 +46,7 @@ public class PartyController {
     @GetMapping
     public Page<PartyDto> search(@RequestParam(required = false) String q,
                                  @PageableDefault(size = 20, sort = "partyName") Pageable pageable) {
-        return partyService.search(PartySearchRequest.builder().q(q).build(), pageable);
+        return partyService.search(new PartySearchRequest(q), pageable);
     }
 
     @PutMapping("/{id}")

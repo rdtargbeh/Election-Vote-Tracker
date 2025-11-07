@@ -1,12 +1,16 @@
-package Backend.ElectionVote.uility;
+package Backend.ElectionVote.utility;
 
 import lombok.*;
 
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
+//@AllArgsConstructor
 @Builder
 public class PartySearchRequest {
     private String q; // searches name/abbreviation
+
+    public PartySearchRequest(String q) {
+        this.q = q;
+    }
 }

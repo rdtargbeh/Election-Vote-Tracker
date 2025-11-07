@@ -3,6 +3,7 @@ package Backend.ElectionVote.service.implement;
 import Backend.ElectionVote.entity.Notification;
 import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.SystemUser;
+import Backend.ElectionVote.enums.NotificationPriority;
 import Backend.ElectionVote.repository.ChatRoomMemberRepository;
 import Backend.ElectionVote.repository.NotificationRepository;
 import Backend.ElectionVote.service.NotificationService;
@@ -39,7 +40,7 @@ public class NotificationServiceImplementation implements NotificationService {
                 .relatedTable(relatedTable)
                 .relatedId(relatedId)
                 .deliveryMethod("IN_APP")
-                .priority("NORMAL")
+                .priority(NotificationPriority.valueOf("NORMAL"))
                 .build();
 
         return notificationRepository.save(n);

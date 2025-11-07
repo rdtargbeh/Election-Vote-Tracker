@@ -1,10 +1,12 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.enums.RoomType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
 import com.vladmihalcea.hibernate.type.json.JsonType;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -29,7 +31,7 @@ public class ChatRoom {
 
     /** GROUP / CHANNEL / DM */
     @Column(name = "room_type", nullable = false, length = 20)
-    private String roomType;
+    private RoomType roomType;
 
     /** Display name (null for DM) */
     @Column(length = 150)
@@ -56,4 +58,15 @@ public class ChatRoom {
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb", nullable = false)
     private String settings = "{}";
+
+    @PrePersist
+    public void prePersist() {
+        if (roomId == null) roomId = UUID.randomUUID();
+        if (dateCreated == null) dateCreated = LocalDateTime.from(Instant.now());
+        if (settings == null || settings.isBlank()) settings = "{}";
+    }
+
+    public UUID getRoomId() {
+        return roomId;
+    }
 }

@@ -38,6 +38,7 @@ public class Candidate {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+
     @Override
     public String toString() {
         return fullName + (party != null ? " (" + party.getAbbreviation() + ")" : "");

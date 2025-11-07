@@ -3,7 +3,7 @@ package Backend.ElectionVote.service;
 import Backend.ElectionVote.dto.OrganizationCreateRequest;
 import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
-import Backend.ElectionVote.uility.OrganizationSearchRequest;
+import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

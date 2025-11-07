@@ -2,7 +2,7 @@ package Backend.ElectionVote.security;
 
 import Backend.ElectionVote.entity.OrgMembership;
 import Backend.ElectionVote.repository.OrgMembershipRepository;
-import Backend.ElectionVote.uility.TenantContext;
+import Backend.ElectionVote.utility.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;

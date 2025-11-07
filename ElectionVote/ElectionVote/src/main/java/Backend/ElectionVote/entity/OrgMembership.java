@@ -154,4 +154,43 @@ public class OrgMembership {
     }
 
 
+    public UUID getMembershipId() {
+        return membershipId;
+    }
+
+    public void setMembershipId(UUID membershipId) {
+        this.membershipId = membershipId;
+    }
+
+    public Organization getOrganization() {
+        return organization;
+    }
+
+    public void setOrganization(Organization organization) {
+        this.organization = organization;
+    }
+
+    public SystemUser getUser() {
+        return user;
+    }
+
+    public void setUser(SystemUser user) {
+        this.user = user;
+    }
+
+    public String getRoleName() {
+        return roleName;
+    }
+
+    public void setRoleName(String roleName) {
+        this.roleName = roleName;
+    }
+
+    public boolean isEnabled() {
+        return isEnabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        isEnabled = enabled;
+    }
 }

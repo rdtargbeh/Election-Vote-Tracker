@@ -8,7 +8,7 @@ import Backend.ElectionVote.mapper.PartyMapper;
 import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.PartyRepository;
 import Backend.ElectionVote.service.PartyService;
-import Backend.ElectionVote.uility.PartySearchRequest;
+import Backend.ElectionVote.utility.PartySearchRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -21,7 +21,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 
-import static Backend.ElectionVote.uility.QueryUtils.normalize;
+import static Backend.ElectionVote.utility.QueryUtils.normalize;
 
 @Service
 @RequiredArgsConstructor

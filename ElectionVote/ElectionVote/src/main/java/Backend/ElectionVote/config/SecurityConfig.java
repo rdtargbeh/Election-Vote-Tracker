@@ -2,6 +2,7 @@ package Backend.ElectionVote.config;
 
 import Backend.ElectionVote.security.TenantFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -14,7 +15,8 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final TenantFilter tenantFilter;
+    @Autowired
+    private TenantFilter tenantFilter;
 
     @Bean
     @Order(0)

@@ -1,4 +1,4 @@
-package Backend.ElectionVote.uility;
+package Backend.ElectionVote.utility;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;

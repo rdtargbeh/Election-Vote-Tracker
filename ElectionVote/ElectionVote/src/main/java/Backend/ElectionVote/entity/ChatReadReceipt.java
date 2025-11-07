@@ -13,7 +13,12 @@ import java.util.UUID;
  * Each (message_id, user_id) pair is unique.
  */
 @Entity
-@Table(name = "chat_read_receipt")
+@Table(
+        name = "chat_read_receipt",
+        indexes = {
+                @Index(name = "idx_chat_read_user", columnList = "user_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -47,4 +52,9 @@ public class ChatReadReceipt {
     /** When the message was read */
     @Column(name = "date_read", nullable = false)
     private LocalDateTime dateRead = LocalDateTime.now();
+
+    @PrePersist
+    public void prePersist() {
+        if (dateRead == null) dateRead = LocalDateTime.now();
+    }
 }

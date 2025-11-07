@@ -5,7 +5,7 @@ import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
 import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.service.OrganizationService;
-import Backend.ElectionVote.uility.OrganizationSearchRequest;
+import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;

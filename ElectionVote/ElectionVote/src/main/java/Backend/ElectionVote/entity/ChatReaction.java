@@ -11,11 +11,16 @@ import java.util.UUID;
         name = "chat_reaction",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uq_chat_reaction_msg_user_emoji",
+                        name = "uk_chat_reaction_msg_user_emoji",
                         columnNames = {"message_id", "user_id", "emoji"}
                 )
+        },
+        indexes = {
+                @Index(name = "idx_chat_reaction_msg", columnList = "message_id"),
+                @Index(name = "idx_chat_reaction_user", columnList = "user_id")
         }
 )
+@EqualsAndHashCode(of = "reactionId")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -53,4 +58,9 @@ public class ChatReaction {
     /** When the reaction was created */
     @Column(name = "date_created", nullable = false)
     private LocalDateTime dateCreated = LocalDateTime.now();
+
+    @PrePersist
+    public void prePersist() {
+        if (dateCreated == null) dateCreated = LocalDateTime.now();
+    }
 }

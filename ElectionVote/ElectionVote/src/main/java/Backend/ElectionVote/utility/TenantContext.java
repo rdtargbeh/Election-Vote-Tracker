@@ -1,4 +1,4 @@
-package Backend.ElectionVote.uility;
+package Backend.ElectionVote.utility;
 
 import java.util.Optional;
 import java.util.UUID;

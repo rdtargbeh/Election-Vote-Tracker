@@ -7,5 +7,7 @@ public enum RoleName {
     AGENT,
     OBSERVER,
     SUPERVISOR,
-    COORDINATOR
+    COORDINATOR,
+    DATA_ENTRY,
+    AUDITOR
 }

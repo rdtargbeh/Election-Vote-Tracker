@@ -9,6 +9,7 @@ import Backend.ElectionVote.service.CountyService;
 import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,10 @@ import java.util.UUID;
 @Transactional
 public class CountyServiceImplementation implements CountyService {
 
-    private final CountyRepository countyRepository;
-    private final CountyMapper countyMapper = new CountyMapper();
+    @Autowired
+    private CountyRepository countyRepository;
+    @Autowired
+    private CountyMapper countyMapper = new CountyMapper();
 
 
     @Override

@@ -1,7 +1,7 @@
 package Backend.ElectionVote.security;
 
 import Backend.ElectionVote.repository.OrganizationRepository;
-import Backend.ElectionVote.uility.TenantContext;
+import Backend.ElectionVote.utility.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.jboss.logging.MDC;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;
@@ -39,7 +40,8 @@ import java.util.UUID;
 public class TenantFilter extends OncePerRequestFilter {
 
     private static final String TENANT_HEADER = "X-Org-Id";
-    private final ObjectProvider<OrganizationRepository> organizationsProvider;
+    @Autowired
+    private ObjectProvider<OrganizationRepository> organizationsProvider;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

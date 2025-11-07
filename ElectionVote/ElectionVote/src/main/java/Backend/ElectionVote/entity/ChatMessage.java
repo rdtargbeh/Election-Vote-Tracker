@@ -1,5 +1,6 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.enums.ChatMemberRole;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
@@ -8,16 +9,32 @@ import com.vladmihalcea.hibernate.type.json.JsonType;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@EqualsAndHashCode(of = "messageId")
 @Entity
 @Table(
         name = "chat_message",
+        indexes = {
+                @Index(name = "idx_chat_msg_room_time", columnList = "room_id, date_created DESC"),
+                @Index(name = "idx_chat_msg_org_time", columnList = "org_id, date_created DESC"),
+                @Index(name = "idx_chat_msg_sender_time", columnList = "sender_id, date_created DESC"),
+                @Index(name = "idx_chat_msg_reply_to", columnList = "reply_to")
+        },
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uq_chat_message_sender_client",
+                        name = "uk_chat_msg_idempotent",
                         columnNames = {"sender_id", "client_guid"}
                 )
         }
 )
+//@Table(
+//        name = "chat_message",
+//        uniqueConstraints = {
+//                @UniqueConstraint(
+//                        name = "uq_chat_message_sender_client",
+//                        columnNames = {"sender_id", "client_guid"}
+//                )
+//        }
+//)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -80,4 +97,12 @@ public class ChatMessage {
 
     @Column(name = "date_deleted")
     private LocalDateTime dateDeleted;
+
+    /** Ensure defaults are applied */
+    @PrePersist
+    public void prePersist() {
+        if (dateCreated == null) dateCreated = LocalDateTime.now();
+        if (contentType == null || contentType.isBlank()) contentType = "TEXT";
+        if (metadata == null || metadata.isBlank()) metadata = "{}";
+    }
 }

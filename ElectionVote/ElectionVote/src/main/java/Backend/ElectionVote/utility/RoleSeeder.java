@@ -1,4 +1,4 @@
-package Backend.ElectionVote.uility;
+package Backend.ElectionVote.utility;
 
 import Backend.ElectionVote.entity.UserRole;
 import Backend.ElectionVote.enums.RoleName;

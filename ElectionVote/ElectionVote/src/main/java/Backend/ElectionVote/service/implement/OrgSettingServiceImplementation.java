@@ -6,12 +6,11 @@ import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.repository.OrgSettingRepository;
 import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.service.OrgSettingService;
-import Backend.ElectionVote.uility.OrgSettingDefaults;
-import Backend.ElectionVote.uility.OrgSettingKeys;
-import Backend.ElectionVote.uility.TenantContext;
+import Backend.ElectionVote.utility.OrgSettingDefaults;
+import Backend.ElectionVote.utility.OrgSettingKeys;
+import Backend.ElectionVote.utility.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

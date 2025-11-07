@@ -1,8 +1,10 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.enums.ChatMemberRole;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -10,12 +12,24 @@ import java.util.UUID;
 @Table(
         name = "chat_room_member",
         uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uq_chat_room_member_room_user",
-                        columnNames = {"room_id", "user_id"}
-                )
+                @UniqueConstraint(name = "uk_chat_member_room_user", columnNames = {"room_id", "user_id"})
+        },
+        indexes = {
+                @Index(name = "idx_chat_member_org_user", columnList = "org_id, user_id"),
+                @Index(name = "idx_chat_member_room", columnList = "room_id"),
+                @Index(name = "idx_chat_member_room_user", columnList = "room_id, user_id"),
+                @Index(name = "idx_chat_member_room_seen", columnList = "room_id, user_id, last_seen_at DESC")
         }
 )
+//@Table(
+//        name = "chat_room_member",
+//        uniqueConstraints = {
+//                @UniqueConstraint(
+//                        name = "uq_chat_room_member_room_user",
+//                        columnNames = {"room_id", "user_id"}
+//                )
+//        }
+//)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -47,8 +61,9 @@ public class ChatRoomMember {
     private SystemUser user;
 
     /** 'MEMBER' or 'ADMIN' */
-    @Column(name = "role_name", nullable = false, length = 20)
-    private String roleName = "MEMBER";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_name", length = 20, nullable = false)
+    private ChatMemberRole roleName; // MEMBER / ADMIN
 
     /** When the user joined the room */
     @Column(name = "joined_at", nullable = false)
@@ -71,4 +86,13 @@ public class ChatRoomMember {
     /** Membership enabled flag (used by message trigger) */
     @Column(name = "is_enabled", nullable = false)
     private boolean isEnabled = true;
+
+    @PrePersist
+    public void prePersist() {
+        if (membershipId == null) membershipId = UUID.randomUUID();
+        if (joinedAt == null) joinedAt = LocalDateTime.from(Instant.now());
+        // DB defaults: muted=false, is_enabled=true — mirror them if null
+        // (booleans default to false in Java; explicitly set enabled if you want true)
+        if (!this.isEnabled) this.isEnabled = true;
+    }
 }

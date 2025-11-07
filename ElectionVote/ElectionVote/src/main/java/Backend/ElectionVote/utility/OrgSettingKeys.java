@@ -1,4 +1,4 @@
-package Backend.ElectionVote.uility;
+package Backend.ElectionVote.utility;
 
 public final class OrgSettingKeys {
     private OrgSettingKeys() {}
