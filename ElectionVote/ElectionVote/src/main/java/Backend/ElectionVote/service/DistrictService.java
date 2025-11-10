@@ -5,6 +5,7 @@ import Backend.ElectionVote.dto.DistrictRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface DistrictService {
@@ -13,6 +14,7 @@ public interface DistrictService {
     DistrictDto update(UUID districtId, DistrictRequest req);
     void delete(UUID districtId);
     DistrictDto get(UUID districtId);
+    List<DistrictDto> listByCounty(UUID countyId);
 
     /**
      * Optional filters:

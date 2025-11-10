@@ -5,12 +5,12 @@ import lombok.*;
 @Getter
 @Setter
 @NoArgsConstructor
-//@AllArgsConstructor
+@AllArgsConstructor
 @Builder
 public class PartySearchRequest {
     private String q; // searches name/abbreviation
 
-    public PartySearchRequest(String q) {
-        this.q = q;
-    }
+//    public PartySearchRequest(String q) {
+//        this.q = q;
+//    }
 }

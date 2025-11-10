@@ -17,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -100,5 +101,12 @@ public class DistrictServiceImplementation implements DistrictService {
             }
         }
         throw new EntityExistsException("District '" + name + "' already exists in this county");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DistrictDto> listByCounty(UUID countyId) {
+        var districts = districtRepo.findByCounty_CountyIdOrderByDistrictNameAsc(countyId);
+        return districts.stream().map(districtMapper::toDTO).toList();
     }
 }

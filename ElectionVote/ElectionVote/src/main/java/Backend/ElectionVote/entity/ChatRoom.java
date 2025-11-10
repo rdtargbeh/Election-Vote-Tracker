@@ -3,11 +3,14 @@ package Backend.ElectionVote.entity;
 import Backend.ElectionVote.enums.RoomType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Getter
@@ -20,7 +23,7 @@ import java.util.UUID;
 @Table(name = "chat_room")
 public class ChatRoom {
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
+//    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "room_id", updatable = false, nullable = false)
     private UUID roomId;
 
@@ -55,18 +58,33 @@ public class ChatRoom {
     private boolean isArchived = false;
 
     /** JSONB settings: e.g., {"slowmode_sec": 3} */
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
-    private String settings = "{}";
+    private Map<String, Object> settings = new HashMap<>();
 
     @PrePersist
     public void prePersist() {
-        if (roomId == null) roomId = UUID.randomUUID();
-        if (dateCreated == null) dateCreated = LocalDateTime.from(Instant.now());
-        if (settings == null || settings.isBlank()) settings = "{}";
+        if (roomId == null) {
+            roomId = UUID.randomUUID(); // or rely on DB default gen_random_uuid()
+        }
+        if (dateCreated == null) {
+            dateCreated = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        }
+        if (settings == null) {
+            settings = new java.util.HashMap<>();
+        }
     }
 
-    public UUID getRoomId() {
-        return roomId;
-    }
+
+//    @Type(JsonType.class)
+//    @Column(columnDefinition = "jsonb", nullable = false)
+//    private String settings = "{}";
+
+//    @PrePersist
+//    public void prePersist() {
+//        if (roomId == null) roomId = UUID.randomUUID();
+//        if (dateCreated == null) dateCreated = LocalDateTime.from(Instant.now());
+//        if (settings == null || settings.isBlank()) settings = "{}";
+//    }
+
 }

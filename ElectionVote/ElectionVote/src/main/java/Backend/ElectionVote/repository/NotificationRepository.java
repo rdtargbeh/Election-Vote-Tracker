@@ -8,5 +8,5 @@ import java.util.UUID;
 
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
-    List<Notification> findByUser_UserIdAndIsReadFalseOrderByCreatedAtDesc(UUID userId);
+    List<Notification> findByUser_UserIdAndIsReadFalseOrderByDateCreatedDesc(UUID userId);
 }

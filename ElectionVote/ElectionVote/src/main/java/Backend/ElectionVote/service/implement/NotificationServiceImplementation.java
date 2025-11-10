@@ -1,5 +1,6 @@
 package Backend.ElectionVote.service.implement;
 
+import Backend.ElectionVote.entity.ChatRoomMember;
 import Backend.ElectionVote.entity.Notification;
 import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.SystemUser;
@@ -53,9 +54,14 @@ public class NotificationServiceImplementation implements NotificationService {
                                               Organization org,
                                               String roomDisplayName,
                                               UUID messageId) {
+
         // Fetch enabled, non-muted members of the room (excluding sender)
-        List<SystemUser> recipients =
-                chatRoomMemberRepository.findActiveUsersToNotify(roomId, senderUserId);
+        List<SystemUser> recipients = chatRoomMemberRepository
+                .findAllByRoom_RoomIdAndIsEnabledTrueAndMutedFalseAndUser_UserIdNot(roomId, senderUserId)
+                .stream()
+                .map(ChatRoomMember::getUser)
+                .distinct()
+                .toList();
 
         String title = "New Message";
         String msg = "New message in " + (roomDisplayName != null ? roomDisplayName : "this room");

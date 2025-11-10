@@ -3,8 +3,9 @@ package Backend.ElectionVote.entity;
 import Backend.ElectionVote.enums.ChatMemberRole;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
-import com.vladmihalcea.hibernate.type.json.JsonType;
+import org.hibernate.annotations.Type;import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -26,15 +27,6 @@ import java.util.UUID;
                 )
         }
 )
-//@Table(
-//        name = "chat_message",
-//        uniqueConstraints = {
-//                @UniqueConstraint(
-//                        name = "uq_chat_message_sender_client",
-//                        columnNames = {"sender_id", "client_guid"}
-//                )
-//        }
-//)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -74,9 +66,9 @@ public class ChatMessage {
     private String content;
 
     /** JSONB metadata — used for FILE or IMAGE (urls, ids, etc.) */
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
-    private String metadata = "{}";
+    private java.util.Map<String, Object> metadata = new java.util.HashMap<>();
 
     /** Optional reply-to message */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -101,8 +93,15 @@ public class ChatMessage {
     /** Ensure defaults are applied */
     @PrePersist
     public void prePersist() {
-        if (dateCreated == null) dateCreated = LocalDateTime.now();
-        if (contentType == null || contentType.isBlank()) contentType = "TEXT";
-        if (metadata == null || metadata.isBlank()) metadata = "{}";
+        if (dateCreated == null) {
+            dateCreated = LocalDateTime.now();
+        }
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "TEXT";
+        }
+        if (metadata == null) {
+            metadata = new java.util.HashMap<>();
+        }
     }
+
 }

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface DistrictRepository extends JpaRepository<District, UUID> {
@@ -20,4 +21,6 @@ public interface DistrictRepository extends JpaRepository<District, UUID> {
 
     /** List by county without search */
     Page<District> findByCounty_CountyId(UUID countyId, Pageable pageable);
+
+    List<District> findByCounty_CountyIdOrderByDistrictNameAsc(UUID countyId);
 }

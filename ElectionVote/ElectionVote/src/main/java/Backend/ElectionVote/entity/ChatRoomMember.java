@@ -21,15 +21,6 @@ import java.util.UUID;
                 @Index(name = "idx_chat_member_room_seen", columnList = "room_id, user_id, last_seen_at DESC")
         }
 )
-//@Table(
-//        name = "chat_room_member",
-//        uniqueConstraints = {
-//                @UniqueConstraint(
-//                        name = "uq_chat_room_member_room_user",
-//                        columnNames = {"room_id", "user_id"}
-//                )
-//        }
-//)
 @Getter
 @Setter
 @NoArgsConstructor

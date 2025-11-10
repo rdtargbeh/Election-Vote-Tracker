@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -14,24 +15,47 @@ import java.util.UUID;
 @Builder
 
 @Entity
-@Table(name = "election")
+@Table(name = "election",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_election_name_year",
+                        columnNames = {"election_name", "year"})
+        })
 public class Election {
     @Id
     @GeneratedValue
     @UuidGenerator
-    @Column(name = "election_id", nullable = false, updatable = false)
+    @Column(name = "election_id", nullable = false, updatable = false, columnDefinition = "uuid")
     private UUID electionId;
 
     @Column(name = "election_name", nullable = false, length = 100)
-    private  String electionName;
+    private String electionName;
 
     @Column(name = "year", nullable = false)
-    private  int year;
+    private int year;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 50)
     private ElectionType electionType;
 
     @Column(name = "is_active", nullable = false)
-    private  boolean isActive;
+    private boolean isActive;
+
+    // Simple audit stamps (optional)
+    @Column(name = "date_created", nullable = false)
+    private LocalDateTime dateCreated;
+
+    @Column(name = "date_updated", nullable = false)
+    private LocalDateTime dateUpdated;
+
+    @PrePersist
+    public void onCreate() {
+        var now = LocalDateTime.now();
+        dateCreated = now;
+        dateUpdated = now;
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        dateUpdated = LocalDateTime.now();
+    }
 }

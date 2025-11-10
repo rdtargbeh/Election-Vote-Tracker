@@ -7,6 +7,11 @@ import org.hibernate.annotations.UuidGenerator;
 import java.util.UUID;
 
 
+/**
+ * Represents the participation of a candidate in a specific election,
+ * optionally within a polling center or district context.
+ */
+
 @Entity
 @Table(
         name = "election_candidate",

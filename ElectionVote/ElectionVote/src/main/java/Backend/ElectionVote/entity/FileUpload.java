@@ -1,10 +1,11 @@
 package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.FileType;
-import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
@@ -76,9 +77,13 @@ public class FileUpload {
     private SystemUser uploadedBy;
 
     /** JSONB field for additional metadata/tags */
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
-    private String tags = "{}";
+    private java.util.Map<String, Object> tags = new java.util.HashMap<>();
+
+//    @Type(JsonType.class)
+//    @Column(columnDefinition = "jsonb", nullable = false)
+//    private String tags = "{}";
 
     /** Soft delete timestamp */
     @Column(name = "deleted_at")

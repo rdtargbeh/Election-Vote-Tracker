@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -48,5 +49,10 @@ public class DistrictController {
                                                   @RequestParam(value = "countyId", required = false) UUID countyId,
                                                   Pageable pageable) {
         return ResponseEntity.ok(service.list(q, countyId, pageable));
+    }
+
+    @GetMapping("/by-county/{countyId}")
+    public ResponseEntity<List<DistrictDto>> listByCounty(@PathVariable UUID countyId) {
+        return ResponseEntity.ok(service.listByCounty(countyId));
     }
 }
