@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
-import java.awt.*;
+import org.locationtech.jts.geom.Point;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -16,8 +16,19 @@ import java.util.UUID;
 @Builder
 
 @Entity
-@Table(name = "observer_report")
-public class ObserverReport {
+@Table(
+        name = "observer_report",
+        indexes = {
+                @Index(name = "idx_obs_org", columnList = "org_id"),
+                @Index(name = "idx_obs_observer", columnList = "observer_id"),
+                @Index(name = "idx_obs_county", columnList = "county_id"),
+                @Index(name = "idx_obs_center", columnList = "center_id"),
+                @Index(name = "idx_obs_type", columnList = "type"),
+                @Index(name = "idx_obs_resolved", columnList = "resolved"),
+                @Index(name = "idx_obs_timestamp", columnList = "timestamp")
+        }
+)
+public class ObserverReport extends AuditBaseEntity {
 
     @Id
     @GeneratedValue
@@ -25,12 +36,12 @@ public class ObserverReport {
     @Column(name = "report_id", nullable = false, updatable = false)
     private UUID reportId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY,  optional = false)
     @JoinColumn(name = "org_id", nullable = false,
             foreignKey = @ForeignKey(name = "observer_report_org_id_fkey"))
     private Organization organization;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY,  optional = false)
     @JoinColumn(name = "observer_id", nullable = false,
             foreignKey = @ForeignKey(name = "observer_report_observer_id_fkey"))
     private SystemUser observer;
