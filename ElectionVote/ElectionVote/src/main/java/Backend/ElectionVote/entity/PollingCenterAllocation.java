@@ -9,8 +9,13 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "polling_center_allocation",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"election_id", "center_id"})
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_alloc_election_center",
+                columnNames = {"election_id","center_id"}
+        ),
+        indexes = {
+                @Index(name = "idx_alloc_election", columnList = "election_id"),
+                @Index(name = "idx_alloc_center", columnList = "center_id")
         }
 )
 @Getter
@@ -18,7 +23,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PollingCenterAllocation {
+public class PollingCenterAllocation extends AuditBaseEntity{
 
     @Id
     @GeneratedValue
@@ -26,21 +31,15 @@ public class PollingCenterAllocation {
     @Column(name = "allocation_id", nullable = false, updatable = false)
     private UUID allocationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-            name = "election_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_allocation_election")
-    )
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "election_id", nullable = false,
+            foreignKey = @ForeignKey(name = "fk_allocation_election"))
     private Election election;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-            name = "center_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "fk_allocation_center")
-    )
-    private PollingCenter pollingCenter;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "center_id", nullable = false,
+            foreignKey = @ForeignKey(name = "fk_allocation_center"))
+    private PollingCenter pollingCenter;;
 
     @Column(name = "registered_voters", nullable = false)
     private int registeredVoters;

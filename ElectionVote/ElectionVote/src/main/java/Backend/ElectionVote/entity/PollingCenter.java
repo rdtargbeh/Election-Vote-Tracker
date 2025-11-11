@@ -10,8 +10,10 @@ import java.util.UUID;
 @Entity
 @Table(
         name = "polling_center",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = {"district_id", "center_name"})
+        uniqueConstraints = @UniqueConstraint(name = "uq_center_code", columnNames = "code"),
+        indexes = {
+                @Index(name = "idx_center_district", columnList = "district_id"),
+                @Index(name = "idx_center_name_ci", columnList = "center_name") // optional, helps LIKE
         }
 )
 
