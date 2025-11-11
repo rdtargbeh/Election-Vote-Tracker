@@ -2,11 +2,15 @@ package Backend.ElectionVote.repository;
 
 import Backend.ElectionVote.entity.Candidate;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
 
-public interface CandidateRepository extends JpaRepository<Candidate, UUID> {
+@Repository
+public interface CandidateRepository extends JpaRepository<Candidate, UUID>, JpaSpecificationExecutor<Candidate> {
 
-    boolean existsByFullNameIgnoreCase(String fullName);
+    boolean existsByFullNameIgnoreCaseAndParty_PartyId(String fullName, UUID partyId);
 
+    boolean existsByFullNameIgnoreCaseAndPartyIsNull(String fullName);
 }

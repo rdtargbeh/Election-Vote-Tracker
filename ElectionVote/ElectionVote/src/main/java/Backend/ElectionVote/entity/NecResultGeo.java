@@ -1,9 +1,6 @@
 package Backend.ElectionVote.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Immutable;
 
@@ -11,7 +8,15 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "v_nec_result_geo")   // <-- the SQL VIEW name
+@Table(name = "nec_result_geo",
+        indexes = {
+                @Index(name = "idx_geo_election", columnList = "election_id"),
+                @Index(name = "idx_geo_county", columnList = "county_id"),
+                @Index(name = "idx_geo_district", columnList = "district_id"),
+                @Index(name = "idx_geo_center", columnList = "center_id"),
+                @Index(name = "idx_geo_upload_time", columnList = "upload_time")
+        })
+
 @Immutable                         // read-only; Hibernate won’t try INSERT/UPDATE
 
 @Getter
@@ -53,6 +58,9 @@ public class NecResultGeo {
     @Column(name = "candidate_votes", columnDefinition = "jsonb", nullable = false)
     private String candidateVotes;
 
+    @Column(name = "total_registered_voters", nullable = false)
+    private Integer totalRegisteredVoters;
+
     @Column(name = "ballots_cast", nullable = false)
     private Integer ballotsCast;
 
@@ -67,6 +75,9 @@ public class NecResultGeo {
 
     @Column(name = "spoiled_ballots", nullable = false)
     private Integer spoiledBallots;
+
+    @Column(name = "ballots_issued")
+    private Integer ballotsIssued;
 
     @Column(name = "source", nullable = false)
     private String source;
