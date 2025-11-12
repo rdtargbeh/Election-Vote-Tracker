@@ -1,6 +1,8 @@
 package Backend.ElectionVote.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -33,14 +35,20 @@ public class TallySheet {
             foreignKey = @ForeignKey(name = "tally_sheet_submission_id_fkey"))
     private VoteSubmission submission;
 
+    @NotNull
+    @Size(min = 5, max = 2048)
     @Column(name = "image_url", nullable = false, columnDefinition = "text")
     private String imageUrl;
 
+    @Size(max = 128)
     @Column(name = "file_sha256", columnDefinition = "text")
     private String fileSha256;
 
     @Column(name = "date_uploaded")
     private LocalDateTime dateUploaded;
+
+    @Column(name = "last_updated")
+    private LocalDateTime lastUpdated;
 
     // Store JSONB as String for now (can switch to Map<String,Object> later)
     @Column(name = "ocr_extracted", columnDefinition = "jsonb")
@@ -49,5 +57,12 @@ public class TallySheet {
     @PrePersist
     void prePersist() {
         if (dateUploaded == null) dateUploaded = LocalDateTime.now();
+        lastUpdated = LocalDateTime.now();
     }
+
+    @PreUpdate
+    void preUpdate() {
+        lastUpdated = LocalDateTime.now();
+    }
+
 }

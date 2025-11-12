@@ -1,6 +1,8 @@
 package Backend.ElectionVote.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -43,6 +45,8 @@ public class VoteDetail {
             foreignKey = @ForeignKey(name = "vote_detail_candidate_id_fkey"))
     private Candidate candidate; // nullable (ON DELETE SET NULL)
 
+    @NotNull
+    @Min(0)
     @Column(name = "vote_count", nullable = false)
     private Integer voteCount;
 }

@@ -32,7 +32,7 @@ public class Organization {
     private UUID orgId;
 
     @Size(max = 120)
-    @Column(name = "org_name", nullable = false, length = 100)
+    @Column(name = "org_name", nullable = false, length = 120)
     private String orgName;
 
     @Enumerated(EnumType.STRING)

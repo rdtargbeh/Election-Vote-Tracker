@@ -8,6 +8,7 @@ import Backend.ElectionVote.entity.*;
 import Backend.ElectionVote.enums.VoteStatus;
 import Backend.ElectionVote.mapper.VoteSubmissionMapper;
 import Backend.ElectionVote.repository.*;
+import Backend.ElectionVote.service.VoteDetailService;
 import Backend.ElectionVote.service.VoteSubmissionService;
 import Backend.ElectionVote.utility.VoteSubmissionSpecs;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -43,6 +44,8 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private final ElectionRepository electionRepo;
     private final PollingCenterRepository centerRepo;
     private final SystemUserRepository userRepo;
+    private final VoteDetailRepository voteDetailRepository;
+    private final VoteDetailService voteDetailService;
     private final PollingCenterAllocationRepository allocationRepo;
 
 
@@ -142,13 +145,31 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         s.setVerifiedBy(verifier);
         s.setDateVerified(LocalDateTime.now());
 
+        // optional reviewer note appended to comments
         if (req.getComment() != null && !req.getComment().isBlank()) {
-            String prefix = (s.getComments()==null? "" : s.getComments() + "\n");
+            String prefix = (s.getComments() == null ? "" : s.getComments() + "\n");
             s.setComments(prefix + "[review] " + req.getComment());
         }
 
-        return mapper.toDTO(voteSubmissionRepository.save(s));
+        try {
+            VoteSubmission saved = voteSubmissionRepository.save(s);
+
+            if (saved.getStatus() == VoteStatus.VERIFIED) {
+                // explode candidate_votes JSON into vote_detail rows
+                voteDetailService.resyncFromSubmission(saved.getSubmissionId());
+            } else {
+                // ensure no details remain for non-verified
+                voteDetailRepository.deleteBySubmissionId(saved.getSubmissionId());
+            }
+
+            return mapper.toDTO(saved);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            // e.g., uq_vs_verified_once (one VERIFIED per (org,election,center))
+            throw new ResponseStatusException(CONFLICT,
+                    "A verified submission already exists for this organization, election, and center");
+        }
     }
+
 
     @Override
     @Transactional
@@ -180,6 +201,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
         return voteSubmissionRepository.findAll(spec, pageable).map(mapper::toDTO);
     }
+
 
     @Override
     @Transactional(readOnly = true)

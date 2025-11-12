@@ -1,6 +1,7 @@
 package Backend.ElectionVote.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -36,6 +37,7 @@ public class PollingCenter {
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 
+    @Min(0)
     @Column(name = "registered_voters", nullable = false)
     private int registeredVoters;
 

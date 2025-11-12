@@ -1,6 +1,7 @@
 package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.FileType;
+import Backend.ElectionVote.enums.StorageProvider;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
@@ -9,6 +10,7 @@ import org.hibernate.type.SqlTypes;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.UUID;
 
 @Getter
@@ -35,7 +37,7 @@ public class FileUpload {
     private Organization organization;
 
     /** Related table name (e.g., 'chat_message', 'vote_submission') */
-    @Column(name = "related_table", nullable = false, length = 50)
+    @Column(name = "related_table", nullable = false, length = 80)
     private String relatedTable;
 
     /** Related record ID in the related table */
@@ -64,8 +66,9 @@ public class FileUpload {
     private String sha256;
 
     /** Storage provider (S3, GCS, AZURE, LOCAL) */
+    @Enumerated(EnumType.STRING)
     @Column(name = "storage_provider", length = 30)
-    private String storageProvider;
+    private StorageProvider storageProvider;
 
     /** The user who uploaded the file */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -81,15 +84,27 @@ public class FileUpload {
     @Column(columnDefinition = "jsonb", nullable = false)
     private java.util.Map<String, Object> tags = new java.util.HashMap<>();
 
-//    @Type(JsonType.class)
-//    @Column(columnDefinition = "jsonb", nullable = false)
-//    private String tags = "{}";
 
     /** Soft delete timestamp */
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "date_deleted")
+    private LocalDateTime dateDeleted;
 
     /** Last update timestamp */
     @Column(name = "date_updated")
     private LocalDateTime dateUpdated = LocalDateTime.now();
+
+    @PrePersist
+    void prePersist() {
+        if (tags == null) tags = new HashMap<>();
+        dateUpdated = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        dateUpdated = LocalDateTime.now();
+    }
+
+    /* Optional helpers */
+    public boolean isDeleted() { return dateDeleted != null; }
+    public void softDelete() { this.dateDeleted = LocalDateTime.now(); }
 }

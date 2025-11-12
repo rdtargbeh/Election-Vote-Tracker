@@ -1,6 +1,7 @@
 package Backend.ElectionVote.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
                 @Index(name = "idx_alloc_center", columnList = "center_id")
         }
 )
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,6 +43,7 @@ public class PollingCenterAllocation extends AuditBaseEntity{
             foreignKey = @ForeignKey(name = "fk_allocation_center"))
     private PollingCenter pollingCenter;;
 
+    @Min(0)
     @Column(name = "registered_voters", nullable = false)
     private int registeredVoters;
 

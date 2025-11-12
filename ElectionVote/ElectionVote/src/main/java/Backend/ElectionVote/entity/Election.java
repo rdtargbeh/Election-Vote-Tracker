@@ -2,6 +2,7 @@ package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.ElectionType;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
@@ -30,6 +31,7 @@ public class Election {
     @Column(name = "election_name", nullable = false, length = 100)
     private String electionName;
 
+    @Min(1900)
     @Column(name = "year", nullable = false)
     private int year;
 
