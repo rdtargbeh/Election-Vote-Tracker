@@ -30,4 +30,16 @@ public final class TenantUtils {
         TenantContext ctx = TenantContext.get();
         return ctx != null && ctx.isSystemAdmin();
     }
+
+    /** Nullable, non-throwing (useful in WS/SSE handshakes, schedulers, filters). */
+    public static UUID currentTenantOrg() {
+        TenantContext ctx = TenantContext.get();
+        return (ctx != null) ? ctx.orgId().orElse(null) : null;
+    }
+
+    /** Nullable, non-throwing (useful in WS/SSE handshakes, schedulers, filters). */
+    public static UUID currentUserId() {
+        TenantContext ctx = TenantContext.get();
+        return (ctx != null) ? ctx.userId().orElse(null) : null;
+    }
 }

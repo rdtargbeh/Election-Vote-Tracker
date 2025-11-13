@@ -23,6 +23,7 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
 
     Page<ChatRoomMember> findByRoom_RoomId(UUID roomId, Pageable pageable);
 
+    boolean existsByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
 
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
     @org.springframework.data.jpa.repository.Query("""
@@ -43,6 +44,7 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
     int bumpByLastPostAt(@org.springframework.data.repository.query.Param("roomId") UUID roomId,
                          @org.springframework.data.repository.query.Param("userId") UUID userId,
                          @org.springframework.data.repository.query.Param("ts") java.time.LocalDateTime ts);
+
 
 
 }
