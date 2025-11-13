@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "vote_submission")
-public class VoteSubmission {
+public class VoteSubmission extends AuditBaseEntity {
 
     @Id
     @GeneratedValue
@@ -87,9 +87,6 @@ public class VoteSubmission {
 
     @Column(name = "submission_hash", unique = true)
     private String submissionHash;
-
-    @Column(name = "version")
-    private Integer version = 1;
 
     @Column(name = "date_deleted")
     private LocalDateTime dateDeleted;

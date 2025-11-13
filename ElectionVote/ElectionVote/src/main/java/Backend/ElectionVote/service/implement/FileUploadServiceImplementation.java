@@ -4,25 +4,29 @@ import Backend.ElectionVote.dto.FileUploadCreateRequest;
 import Backend.ElectionVote.dto.FileUploadDto;
 import Backend.ElectionVote.entity.*;
 import Backend.ElectionVote.enums.FileType;
+import Backend.ElectionVote.enums.StorageProvider;
 import Backend.ElectionVote.mapper.FileUploadMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.FileStorageService;
 import Backend.ElectionVote.service.FileUploadService;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.util.*;
 
 
 @Service
@@ -41,6 +45,7 @@ public class FileUploadServiceImplementation implements FileUploadService {
     private final ChatMessageRepository chatRepo;              // guard when related_table=chat_message
 
     private final FileUploadMapper mapper = new FileUploadMapper();
+
 
     @Override
     @Transactional
@@ -228,4 +233,158 @@ public class FileUploadServiceImplementation implements FileUploadService {
             }
         }
     }
+
+
+    @Override
+    public List<FileUploadDto> saveAllForEntity(
+            Organization org,
+            String relatedTable,
+            UUID relatedId,
+            SystemUser uploadedBy,
+            List<MultipartFile> files,
+            Map<String, Object> tags
+    ) {
+        if (org == null || org.getOrgId() == null) {
+            throw new IllegalArgumentException("Organization is required");
+        }
+        if (relatedTable == null || relatedTable.isBlank()) {
+            throw new IllegalArgumentException("relatedTable is required");
+        }
+        if (relatedId == null) {
+            throw new IllegalArgumentException("relatedId is required");
+        }
+        if (files == null || files.isEmpty()) {
+            return List.of();
+        }
+
+        final String folder = buildFolder(relatedTable, relatedId); // e.g. observer_report/{UUID}/2025-11-12
+        final Map<String, Object> baseTags = tags != null ? new HashMap<>(tags) : new HashMap<>();
+
+        List<FileUploadDto> out = new ArrayList<>(files.size());
+        for (MultipartFile mf : files) {
+            if (mf.isEmpty()) continue;
+
+            try (InputStream in = mf.getInputStream()) {
+
+                // 1) Compute SHA-256 for de-dup (per org)
+                String sha256 = DigestUtils.sha256Hex(in);
+                // Re-open stream (already consumed) for actual store:
+                try (InputStream in2 = mf.getInputStream()) {
+
+                    // If identical file already exists for this org, re-use it
+                    Optional<FileUpload> existing = fileUploadRepository.findActiveByOrgAndSha(org.getOrgId(), sha256);
+                    if (existing.isPresent()) {
+                        out.add(mapper.toDTO(existing.get()));
+                        continue;
+                    }
+
+                    String originalName = sanitize(mf.getOriginalFilename());
+                    String safeName = uniqueName(sha256, originalName);
+                    String contentType = safeContentType(mf.getContentType(), originalName);
+                    long size = mf.getSize();
+
+                    // 2) Store the binary (local/S3/etc.)
+                    String fileUrl = storage.store(folder, safeName, in2, size, contentType);
+
+                    // 3) Persist file_upload row
+                    FileUpload entity = new FileUpload();
+                    entity.setOrganization(org);
+                    entity.setRelatedTable(relatedTable);
+                    entity.setRelatedId(relatedId);
+                    entity.setUploadedBy(uploadedBy);
+                    entity.setFileUrl(fileUrl);
+                    entity.setMimeType(contentType);
+                    entity.setSizeBytes(size);
+                    entity.setSha256(sha256);
+                    entity.setStorageProvider(StorageProvider.LOCAL); // "LOCAL" / "S3" etc.
+                    entity.setDateUpdated(java.time.LocalDateTime.now());
+                    entity.setTags(mergedTags(baseTags, originalName, safeName));
+
+                    // Infer FileType from mime/extension
+                    entity.setFileType(guessType(contentType, originalName));
+
+                    FileUpload saved;
+                    try {
+                        saved = fileUploadRepository.save(entity);
+                    } catch (DataIntegrityViolationException dup) {
+                        // unique constraint hit (org_id + sha256). Fetch existing & return it
+                        saved = fileUploadRepository.findActiveByOrgAndSha(org.getOrgId(), sha256)
+                                .orElseThrow(() -> dup);
+                    }
+
+                    out.add(mapper.toDTO(saved));
+                }
+            } catch (Exception e) {
+                // You can choose to fail-fast or skip failed file & continue others.
+                // Here we fail-fast to surface issues early:
+                throw new RuntimeException("Failed to store file: " + mf.getOriginalFilename(), e);
+            }
+        }
+        return out;
+    }
+
+
+    // ---------- helpers ----------
+    private static String buildFolder(String relatedTable, UUID relatedId) {
+        return relatedTable + "/" + relatedId + "/" + LocalDate.now();
+    }
+
+    private static String sanitize(String name) {
+        if (name == null || name.isBlank()) return "file";
+        // strip path segments and risky chars
+        String base = name.replace("\\", "/");
+        base = base.substring(base.lastIndexOf('/') + 1);
+        base = base.replaceAll("[\\r\\n]", "_");
+        return base;
+    }
+
+    private static String uniqueName(String sha256, String originalName) {
+        String ext = "";
+        int dot = originalName.lastIndexOf('.');
+        if (dot > -1 && dot < originalName.length() - 1) {
+            ext = originalName.substring(dot).toLowerCase(Locale.ROOT);
+        }
+        return sha256 + ext; // content-addressed
+    }
+
+    private static String safeContentType(String provided, String filename) {
+        if (provided != null && !provided.isBlank()) return provided;
+        // guess from extension
+        String lower = filename.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return MediaType.IMAGE_JPEG_VALUE;
+        if (lower.endsWith(".png")) return MediaType.IMAGE_PNG_VALUE;
+        if (lower.endsWith(".gif")) return MediaType.IMAGE_GIF_VALUE;
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".mov")) return "video/quicktime";
+        return MediaType.APPLICATION_OCTET_STREAM_VALUE;
+    }
+
+    private static Map<String, Object> mergedTags(Map<String, Object> base, String original, String stored) {
+        Map<String, Object> t = new HashMap<>(base);
+        t.putIfAbsent("original_name", original);
+        t.putIfAbsent("stored_name", stored);
+        return t;
+    }
+
+    private static FileType guessType(String mime, String filename) {
+        if (mime == null) mime = "";
+        String m = mime.toLowerCase(Locale.ROOT);
+        String f = filename.toLowerCase(Locale.ROOT);
+
+        if (m.startsWith("image/") || f.matches(".*\\.(png|jpg|jpeg|gif|webp|bmp)$")) return FileType.PHOTO;
+        if (m.startsWith("video/") || f.matches(".*\\.(mp4|mov|avi|mkv|webm)$")) return FileType.VIDEO;
+        if (m.startsWith("audio/") || f.matches(".*\\.(mp3|wav|m4a|aac|ogg)$")) return FileType.AUDIO;
+        if (f.endsWith(".pdf") || m.equals("application/pdf")) return FileType.DOCUMENT;
+        // Default
+        return FileType.DOCUMENT;
+    }
+
+    private String storageProviderName() {
+        // If you have multiple impls, you can @Profile them and return "LOCAL"/"S3"/"GCS" here accordingly
+        // For the LocalFileStorageService case:
+        return "LOCAL";
+    }
+
+
 }

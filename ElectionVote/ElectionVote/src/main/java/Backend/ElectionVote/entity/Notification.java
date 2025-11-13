@@ -1,15 +1,27 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.enums.DeliveryMethod;
 import Backend.ElectionVote.enums.NotificationPriority;
+import Backend.ElectionVote.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UuidGenerator;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static Backend.ElectionVote.enums.NotificationPriority.NORMAL;
 
 @Entity
-@Table(name = "notification")
+@Table(
+        name = "notification",
+        indexes = {
+                @Index(name = "idx_notification_user", columnList = "user_id, is_read"),
+                @Index(name = "idx_notification_org", columnList = "org_id"),
+                @Index(name = "idx_notification_related", columnList = "related_table, related_id")
+        }
+)
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,25 +30,26 @@ import static Backend.ElectionVote.enums.NotificationPriority.NORMAL;
 public class Notification {
 
     @Id
+    @UuidGenerator
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "notification_id", updatable = false, nullable = false)
     private UUID notificationId;
 
     /** Organization this notification belongs to */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "org_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_notification_org"))
     private Organization organization;
 
     /** Target user */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_notification_user"))
     private SystemUser user;
 
-    /** Type category (CHAT, VOTE, SYSTEM, etc.) */
+    @Enumerated(EnumType.STRING)
     @Column(name = "type", length = 50, nullable = false)
-    private String type;
+    private NotificationType type;
 
     /** Short title (e.g., “New Message”, “Vote Approved”) */
     @Column(name = "title", length = 150, nullable = false)
@@ -74,13 +87,23 @@ public class Notification {
     @Column(name = "priority", length = 20)
     private NotificationPriority priority = NotificationPriority.NORMAL;
 
-    /** Delivery channel: IN_APP, EMAIL, SMS, SYSTEM */
-    @Column(name = "delivery_method", length = 30)
-    private String deliveryMethod = "IN_APP";
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_method", length = 30, nullable = false)
+    private DeliveryMethod deliveryMethod = DeliveryMethod.IN_APP;
 
     /** Optional creator (for audit trail) */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by",
             foreignKey = @ForeignKey(name = "fk_notification_creator"))
     private SystemUser createdBy;
+
+    @Column(name = "idempotency_key", length = 100, unique = true)
+    private String idempotencyKey;
+
+    @PrePersist
+    void prePersist() {
+        if (dateCreated == null) dateCreated = LocalDateTime.now();
+        if (priority == null) priority = NotificationPriority.NORMAL;
+        if (deliveryMethod == null) deliveryMethod = DeliveryMethod.IN_APP;
+    }
 }

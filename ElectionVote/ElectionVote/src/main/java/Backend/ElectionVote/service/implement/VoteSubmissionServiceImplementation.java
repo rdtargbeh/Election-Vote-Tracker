@@ -1,15 +1,14 @@
 package Backend.ElectionVote.service.implement;
 
-import Backend.ElectionVote.dto.VoteSubmissionCreateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionDto;
-import Backend.ElectionVote.dto.VoteSubmissionUpdateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionVerifyRequest;
+import Backend.ElectionVote.dto.*;
 import Backend.ElectionVote.entity.*;
+import Backend.ElectionVote.enums.DeliveryMethod;
+import Backend.ElectionVote.enums.NotificationPriority;
+import Backend.ElectionVote.enums.NotificationType;
 import Backend.ElectionVote.enums.VoteStatus;
 import Backend.ElectionVote.mapper.VoteSubmissionMapper;
 import Backend.ElectionVote.repository.*;
-import Backend.ElectionVote.service.VoteDetailService;
-import Backend.ElectionVote.service.VoteSubmissionService;
+import Backend.ElectionVote.service.*;
 import Backend.ElectionVote.utility.VoteSubmissionSpecs;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,15 +19,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.springframework.http.HttpStatus.*;
 
@@ -46,14 +44,23 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private final SystemUserRepository userRepo;
     private final VoteDetailRepository voteDetailRepository;
     private final VoteDetailService voteDetailService;
+    private final NotificationService notificationService;
     private final PollingCenterAllocationRepository allocationRepo;
-
+    private final FileUploadService fileUploadService;
+    private final TallySheetRepository tallySheetRepository;
+    private final AuditLogService auditLogService;
 
     private final VoteSubmissionMapper mapper = new VoteSubmissionMapper();
 
+
+    @Override
+    public VoteSubmissionDto create(VoteSubmissionCreateRequest req) {
+        return create(req, null);
+    }
+
     @Override
     @Transactional
-    public VoteSubmissionDto create(VoteSubmissionCreateRequest req) {
+    public VoteSubmissionDto create(VoteSubmissionCreateRequest req, List<MultipartFile> files) {
         Organization org = orgRepo.findById(req.getOrgId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Organization not found"));
         Election e = electionRepo.findById(req.getElectionId())
@@ -63,12 +70,10 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         SystemUser agent = userRepo.findById(req.getAgentId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Agent not found"));
 
-        // authoritative registered/issued from allocation
         var alloc = allocationRepo.findByElection_ElectionIdAndPollingCenter_CenterId(
                 e.getElectionId(), c.getCenterId()
         ).orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Center not allocated for this election"));
 
-        // tally validation (same rules as NEC)
         validateTally(req.getCandidateVotes(),
                 nz(req.getInvalidBallots()), nz(req.getBlankBallots()), nz(req.getRejectedBallots()), nz(req.getSpoiledBallots()),
                 nz(req.getBallotsCast()), alloc.getRegisteredVoters(), alloc.getBallotsIssued());
@@ -84,19 +89,51 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
         s.setVersion(1);
         VoteSubmission saved = voteSubmissionRepository.save(s);
+
+        // ✅ attach files (store in file_upload, create TallySheet for images)
+        if (files != null && !files.isEmpty()) {
+            attachFilesToSubmission(org, saved, agent, files);
+        }
+
+        // Audit Log Activity
+        auditLogService.logCreate(
+                org.getOrgId(),
+                agent.getUserId(),
+                "VoteSubmission",
+                "Created submission: " + saved.getSubmissionId() + " at " + c.getCenterName()
+        );
+
+        // ✅ notify agent (submission received)
+        notify(
+                org.getOrgId(), agent.getUserId(),
+                NotificationType.VOTE,
+                "Submission Received",
+                "Your vote submission for " + c.getCenterName() + " was received.",
+                "vote_submission", saved.getSubmissionId(),
+                NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+        );
+
         return mapper.toDTO(saved);
     }
 
+
+    // ----------------- UPDATE (no files) -----------------
+    @Override
+    public VoteSubmissionDto update(UUID id, VoteSubmissionUpdateRequest req) {
+        return update(id, req, null);
+    }
+
+
+    // ----------------- UPDATE (with files) -----------------
     @Override
     @Transactional
-    public VoteSubmissionDto update(UUID id, VoteSubmissionUpdateRequest req) {
+    public VoteSubmissionDto update(UUID id, VoteSubmissionUpdateRequest req, List<MultipartFile> files) {
         VoteSubmission s = voteSubmissionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
         if (s.getStatus() != VoteStatus.PENDING) {
             throw new ResponseStatusException(BAD_REQUEST, "Only PENDING submissions can be updated");
         }
 
-        // merge values to validate
         Map<UUID,Integer> mergedVotes = req.getCandidateVotes() != null ? req.getCandidateVotes() : readVotes(s.getCandidateVotes());
         int cast    = req.getBallotsCast()    != null ? req.getBallotsCast()    : s.getBallotsCast();
         int invalid = req.getInvalidBallots() != null ? req.getInvalidBallots() : s.getInvalidBallots();
@@ -111,25 +148,77 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         validateTally(mergedVotes, invalid, blank, rej, spo, cast, alloc.getRegisteredVoters(), alloc.getBallotsIssued());
 
         mapper.apply(req, s);
-        s.setVersion(s.getVersion() == null ? 1 : s.getVersion()+1);
-
-        // recompute hash for idempotency across updates
+        s.setVersion(s.getVersion() + 1);
         s.setSubmissionHash(buildSubmissionHash(
                 s.getOrganization().getOrgId(), s.getElection().getElectionId(), s.getPollingCenter().getCenterId(),
                 s.getAgent().getUserId(), s.getCandidateVotes(), s.getBallotsCast(), s.getInvalidBallots(),
                 s.getBlankBallots(), s.getRejectedBallots(), s.getSpoiledBallots()
         ));
 
-        if (voteSubmissionRepository.existsBySubmissionHash(s.getSubmissionHash())) {
-            // If this exact content already exists on another submission, block
-            // (optional: allow self-same by id compare)
+        VoteSubmission saved = voteSubmissionRepository.save(s);
+
+        // ✅ attach any appended files
+        if (files != null && !files.isEmpty()) {
+            attachFilesToSubmission(saved.getOrganization(), saved, saved.getAgent(), files);
         }
 
-        return mapper.toDTO(voteSubmissionRepository.save(s));
+        // Audit Log Activity
+        auditLogService.logUpdate(
+                s.getOrganization().getOrgId(),
+                s.getAgent().getUserId(),
+                "VoteSubmission",
+                "Updated submission: " + s.getSubmissionId()
+        );
+
+        // ✅ notify agent (submission updated)
+        notify(
+                saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+                NotificationType.VOTE,
+                "Submission Updated",
+                "Your vote submission for " + saved.getPollingCenter().getCenterName() + " was updated.",
+                "vote_submission", saved.getSubmissionId(),
+                NotificationPriority.LOW, DeliveryMethod.IN_APP
+        );
+
+        return mapper.toDTO(saved);
     }
 
+
+    // ---------- small helper to keep call sites clean ----------
+    private void notify(UUID orgId, UUID userId,
+                        NotificationType type, String title, String message,
+                        String relatedTable, UUID relatedId,
+                        NotificationPriority priority,
+                        Set<DeliveryMethod> channels,
+                        String idempotencyKey) {
+        NotificationCreateRequest r = NotificationCreateRequest.builder()
+                .orgId(orgId)
+                .userId(userId)
+                .type(type)
+                .title(title)
+                .message(message)
+                .relatedTable(relatedTable)
+                .relatedId(relatedId)
+                .priority(priority != null ? priority : NotificationPriority.NORMAL)
+                .channels((channels == null || channels.isEmpty())
+                        ? EnumSet.of(DeliveryMethod.IN_APP)
+                        : EnumSet.copyOf(channels))
+                .idempotencyKey(idempotencyKey)
+                .build();
+        notificationService.publish(r);
+    }
+
+    private void notify(UUID orgId, UUID userId,
+                        NotificationType type, String title, String message,
+                        String relatedTable, UUID relatedId,
+                        NotificationPriority priority, DeliveryMethod method) {
+        notify(orgId, userId, type, title, message, relatedTable, relatedId,
+                priority, EnumSet.of(method), null);
+    }
+
+
+    // ----------------- VERIFY (unchanged notifications) -----------------
     @Override
-    @Transactional
     public VoteSubmissionDto verify(UUID id, VoteSubmissionVerifyRequest req) {
         VoteSubmission s = voteSubmissionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
@@ -145,7 +234,6 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         s.setVerifiedBy(verifier);
         s.setDateVerified(LocalDateTime.now());
 
-        // optional reviewer note appended to comments
         if (req.getComment() != null && !req.getComment().isBlank()) {
             String prefix = (s.getComments() == null ? "" : s.getComments() + "\n");
             s.setComments(prefix + "[review] " + req.getComment());
@@ -155,27 +243,73 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             VoteSubmission saved = voteSubmissionRepository.save(s);
 
             if (saved.getStatus() == VoteStatus.VERIFIED) {
-                // explode candidate_votes JSON into vote_detail rows
                 voteDetailService.resyncFromSubmission(saved.getSubmissionId());
+                notify(
+                        saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+                        NotificationType.VOTE,
+                        "Submission Verified",
+                        "Your submission at " + saved.getPollingCenter().getCenterName() + " was verified.",
+                        "vote_submission", saved.getSubmissionId(),
+                        NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+                );
+
+                // Audit Log Activity
+                auditLogService.logVerify(
+                        saved.getOrganization().getOrgId(),
+                        verifier.getUserId(),
+                        "VoteSubmission",
+                        "Verified submission: " + saved.getSubmissionId()
+                );
+
             } else {
-                // ensure no details remain for non-verified
                 voteDetailRepository.deleteBySubmissionId(saved.getSubmissionId());
+                notify(
+                        saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+                        NotificationType.VOTE,
+                        "Submission Rejected",
+                        "Your submission at " + saved.getPollingCenter().getCenterName() + " was rejected."
+                                + (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : ""),
+                        "vote_submission", saved.getSubmissionId(),
+                        NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+                );
             }
 
+            // Audit Log Activity
+            auditLogService.logReject(
+                    saved.getOrganization().getOrgId(),
+                    verifier.getUserId(),
+                    "VoteSubmission",
+                    "Rejected submission: " + saved.getSubmissionId() +
+                            (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : "")
+            );
+
             return mapper.toDTO(saved);
+
         } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-            // e.g., uq_vs_verified_once (one VERIFIED per (org,election,center))
             throw new ResponseStatusException(CONFLICT,
                     "A verified submission already exists for this organization, election, and center");
         }
     }
 
 
+
     @Override
     @Transactional
     public void delete(UUID id) {
-        if (!voteSubmissionRepository.existsById(id)) throw new ResponseStatusException(NOT_FOUND, "Submission not found");
-        voteSubmissionRepository.deleteById(id); // or soft-delete if you need audit trail
+        VoteSubmission s = voteSubmissionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
+
+        voteSubmissionRepository.deleteById(id);
+
+        // ✅ notify agent (deleted)
+        notify(
+                s.getOrganization().getOrgId(), s.getAgent().getUserId(),
+                NotificationType.VOTE,
+                "Submission Deleted",
+                "Your vote submission for " + s.getPollingCenter().getCenterName() + " was deleted.",
+                "vote_submission", s.getSubmissionId(),
+                NotificationPriority.LOW, DeliveryMethod.IN_APP
+        );
     }
 
     @Override
@@ -253,4 +387,42 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private static int nz(Integer x){ return x==null?0:x; }
 
 
+    // ----------------- FILE ATTACHMENT HELPER -----------------
+    private void attachFilesToSubmission(Organization org,
+                                         VoteSubmission submission,
+                                         SystemUser uploadedBy,
+                                         List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) return;
+
+        // store in file_upload
+        List<FileUploadDto> stored = fileUploadService.saveAllForEntity(
+                org, "vote_submission", submission.getSubmissionId(), uploadedBy, files, Map.of("source", "agent_upload")
+        );
+
+        // for images, mirror into tally_sheet table
+        for (FileUploadDto f : stored) {
+            String mime = f.getMimeType();
+            if (mime != null && mime.startsWith("image/")) {
+                // optional de-dup by sha per submission
+                if (f.getSha256() != null && tallySheetRepository.existsBySubmissionAndSha(submission.getSubmissionId(), f.getSha256())) {
+                    continue;
+                }
+                TallySheet t = new TallySheet();
+                t.setOrganization(org);
+                t.setSubmission(submission);
+                t.setImageUrl(f.getFileUrl());
+                t.setFileSha256(f.getSha256());
+                // dateUploaded via @PrePersist
+                tallySheetRepository.save(t);
+            }
+
+            // Audit Log Activity
+            auditLogService.logUpload(
+                    org.getOrgId(),
+                    uploadedBy.getUserId(),
+                    "TallySheet",
+                    "Uploaded tally sheet for submission: " + submission
+            );
+        }
+    }
 }

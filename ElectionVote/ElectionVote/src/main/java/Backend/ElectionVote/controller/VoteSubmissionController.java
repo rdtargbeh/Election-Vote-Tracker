@@ -14,9 +14,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -26,15 +29,29 @@ public class VoteSubmissionController {
 
     private final VoteSubmissionService voteSubmissionService;
 
-    @PostMapping
-    public VoteSubmissionDto create(@Valid @RequestBody VoteSubmissionCreateRequest req) {
-        return voteSubmissionService.create(req);
+
+    // -------- CREATE (handles both with and without files) --------
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public VoteSubmissionDto create(
+            @RequestPart("payload") VoteSubmissionCreateRequest req,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files
+    ) {
+        // if files are present, call the overloaded method
+        return (files != null && !files.isEmpty())
+                ? voteSubmissionService.create(req, files)
+                : voteSubmissionService.create(req);
     }
 
-    @PutMapping("/{id}")
-    public VoteSubmissionDto update(@PathVariable UUID id,
-                                    @RequestBody VoteSubmissionUpdateRequest req) {
-        return voteSubmissionService.update(id, req);
+    // -------- UPDATE (handles both with and without files) --------
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public VoteSubmissionDto update(
+            @PathVariable UUID id,
+            @RequestPart("payload") VoteSubmissionUpdateRequest req,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files
+    ) {
+        return (files != null && !files.isEmpty())
+                ? voteSubmissionService.update(id, req, files)
+                : voteSubmissionService.update(id, req);
     }
 
     @PostMapping("/{id}/review")
@@ -67,7 +84,6 @@ public class VoteSubmissionController {
     }
 
 
-
     /**
      * Returns the total number of visible vote submissions.
      *
@@ -77,4 +93,16 @@ public class VoteSubmissionController {
     public long countVisibleSubmissions() {
         return voteSubmissionService.countVisibleSubmissions();
     }
+
+
+    //    @PostMapping
+//    public VoteSubmissionDto create(@Valid @RequestBody VoteSubmissionCreateRequest req) {
+//        return voteSubmissionService.create(req);
+//    }
+//
+//    @PutMapping("/{id}")
+//    public VoteSubmissionDto update(@PathVariable UUID id,
+//                                    @RequestBody VoteSubmissionUpdateRequest req) {
+//        return voteSubmissionService.update(id, req);
+//    }
 }

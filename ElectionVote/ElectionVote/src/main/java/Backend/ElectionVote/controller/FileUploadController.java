@@ -3,8 +3,12 @@ package Backend.ElectionVote.controller;
 
 import Backend.ElectionVote.dto.FileUploadCreateRequest;
 import Backend.ElectionVote.dto.FileUploadDto;
+import Backend.ElectionVote.entity.Organization;
+import Backend.ElectionVote.entity.SystemUser;
 import Backend.ElectionVote.enums.FileType;
 import Backend.ElectionVote.enums.StorageProvider;
+import Backend.ElectionVote.repository.OrganizationRepository;
+import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.service.FileUploadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +16,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,6 +28,8 @@ import java.util.UUID;
 public class FileUploadController {
 
     private final FileUploadService service;
+    private final OrganizationRepository orgRepo;
+    private final SystemUserRepository userRepo;
 
     /** Multipart upload */
     @PostMapping(value = "/{relatedTable}/{relatedId}/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -70,5 +78,21 @@ public class FileUploadController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID fileId, @RequestParam UUID requesterId) {
         service.softDelete(fileId, requesterId);
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public List<FileUploadDto> upload(
+            @RequestParam UUID orgId,
+            @RequestParam String relatedTable,
+            @RequestParam UUID relatedId,
+            @RequestParam UUID uploadedBy,
+            @RequestPart("files") List<MultipartFile> files
+    ) {
+        Organization org = orgRepo.findById(orgId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found"));
+        SystemUser user = userRepo.findById(uploadedBy)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        return service.saveAllForEntity(org, relatedTable, relatedId, user, files, Map.of());
     }
 }

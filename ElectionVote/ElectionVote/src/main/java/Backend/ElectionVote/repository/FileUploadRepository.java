@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -25,4 +26,12 @@ public interface FileUploadRepository extends JpaRepository<FileUpload, UUID>, J
     @Query("select (count(f) > 0) from FileUpload f " +
             "where f.organization.orgId = :orgId and f.sha256 = :sha and f.dateDeleted is null")
     boolean existsActiveByOrgAndSha(@Param("orgId") UUID orgId, @Param("sha") String sha);
+
+    @Query("""
+           SELECT f FROM FileUpload f
+           WHERE f.organization.orgId = :orgId
+             AND f.sha256 = :sha
+             AND f.dateDeleted IS NULL
+           """)
+    Optional<FileUpload> findActiveByOrgAndSha(@Param("orgId") UUID orgId, @Param("sha") String sha);
 }

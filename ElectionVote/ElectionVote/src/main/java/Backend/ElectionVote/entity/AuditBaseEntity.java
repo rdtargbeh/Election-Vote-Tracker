@@ -20,12 +20,12 @@ import java.time.LocalDateTime;
 public abstract class AuditBaseEntity {
 
     @CreatedDate
-    @Column(name = "created_at", updatable = false, nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "date_created", updatable = false, nullable = false)
+    private LocalDateTime dateCreated;
 
     @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "date_updated", nullable = false)
+    private LocalDateTime dateUpdated;
 
     @CreatedBy
     @Column(name = "created_by", length = 120)

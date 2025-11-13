@@ -1,15 +1,19 @@
 package Backend.ElectionVote.service.implement;
 
+import Backend.ElectionVote.dto.FileUploadDto;
 import Backend.ElectionVote.dto.TallySheetCreateByUrlRequest;
 import Backend.ElectionVote.dto.TallySheetDto;
 import Backend.ElectionVote.entity.Organization;
+import Backend.ElectionVote.entity.SystemUser;
 import Backend.ElectionVote.entity.TallySheet;
 import Backend.ElectionVote.entity.VoteSubmission;
 import Backend.ElectionVote.mapper.TallySheetMapper;
 import Backend.ElectionVote.repository.OrganizationRepository;
+import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.repository.TallySheetRepository;
 import Backend.ElectionVote.repository.VoteSubmissionRepository;
 import Backend.ElectionVote.service.FileStorageService;
+import Backend.ElectionVote.service.FileUploadService;
 import Backend.ElectionVote.service.TallySheetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,22 +26,32 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.util.*;
 
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class TallySheetServiceImplementation implements TallySheetService {
 
     private final TallySheetRepository repo;
     private final OrganizationRepository orgRepo;
     private final VoteSubmissionRepository submissionRepo;
+    private final FileUploadService fileUploadService;   // ✅ add
+    private final SystemUserRepository userRepo;
+
     @Autowired
     private FileStorageService storage;
+
     private final TallySheetMapper mapper = new TallySheetMapper();
 
+
+
+    /**
+     * Final implementation: store the file in the unified FileUpload pipeline and
+     * bind it to the created TallySheet row (related_table = "tally_sheet", related_id = uploadId).
+     */
     @Override
     @Transactional
     public TallySheetDto upload(UUID orgId, UUID submissionId, MultipartFile file) {
@@ -46,7 +60,7 @@ public class TallySheetServiceImplementation implements TallySheetService {
         VoteSubmission sub = submissionRepo.findById(submissionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Submission not found"));
 
-        // org consistency will also be enforced by DB trigger, but fail fast here:
+        // Org consistency guard
         if (!sub.getOrganization().getOrgId().equals(org.getOrgId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Submission belongs to a different organization");
         }
@@ -54,34 +68,46 @@ public class TallySheetServiceImplementation implements TallySheetService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
         }
 
+        // SHA-256 for duplicate protection at submission scope
         String sha = sha256(file);
-        // Optional: avoid duplicates at submission level
         if (sha != null && repo.existsBySubmissionAndSha(submissionId, sha)) {
-            // return existing or reject; here we reject:
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate file (same SHA-256) for this submission");
         }
 
-        String original = Objects.requireNonNullElse(file.getOriginalFilename(), "upload.bin");
-        String ext = original.contains(".") ? original.substring(original.lastIndexOf('.')+1) : "bin";
-        String storedName = sub.getSubmissionId() + "-" + UUID.randomUUID() + "." + ext;
+        // Resolve uploader = submission agent (required for audit trail)
+        SystemUser uploadedBy = Optional.ofNullable(sub.getAgent())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Submission has no agent/uploader"));
 
-        String url;
-        try (InputStream in = file.getInputStream()) {
-            url = storage.store("tally-sheets", storedName, in, file.getSize(), file.getContentType());
-        } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file");
-        }
-
+        // 1) Create TallySheet first (to get uploadId we will reference from file_upload)
         TallySheet t = new TallySheet();
         t.setOrganization(org);
         t.setSubmission(sub);
-        t.setImageUrl(url);
-        t.setFileSha256(sha);
-        // dateUploaded & lastUpdated are handled by @PrePersist/@PreUpdate in the entity
-
+        t.setDateUploaded(LocalDateTime.now());
         TallySheet saved = repo.save(t);
+
+        // 2) Store via FileUploadService and bind to this tally sheet
+        Map<String, Object> tags = new HashMap<>();
+        if (sha != null) tags.put("sha256", sha);
+        tags.put("kind", "tally_sheet");
+
+        List<FileUploadDto> created = fileUploadService.saveAllForEntity(
+                org,
+                "tally_sheet",
+                saved.getUploadId(),
+                uploadedBy,
+                List.of(file),
+                tags
+        );
+        FileUploadDto f = created.get(0);
+
+        // 3) Backfill tally_sheet URL & SHA then persist
+        saved.setImageUrl(f.getFileUrl());
+        saved.setFileSha256(f.getSha256() != null ? f.getSha256() : sha);
+        saved = repo.save(saved);
+
         return mapper.toDTO(saved);
     }
+
 
     @Override
     @Transactional
@@ -107,6 +133,7 @@ public class TallySheetServiceImplementation implements TallySheetService {
         t.setImageUrl(req.getImageUrl());
         t.setFileSha256(req.getFileSha256());
         t.setOcrExtracted(req.getOcrExtracted());
+        t.setDateUploaded(LocalDateTime.now());
 
         return mapper.toDTO(repo.save(t));
     }

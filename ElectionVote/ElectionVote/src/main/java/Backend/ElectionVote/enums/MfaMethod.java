@@ -2,5 +2,7 @@ package Backend.ElectionVote.enums;
 
 public enum MfaMethod {
     TOTP,
-    SMS
+    SMS,
+    EMAIL,
+    WEBAUTHN
 }
