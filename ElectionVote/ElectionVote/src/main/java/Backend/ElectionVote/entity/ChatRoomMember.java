@@ -6,6 +6,7 @@ import lombok.*;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -70,6 +71,9 @@ public class ChatRoomMember {
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
 
+    @Column(name = "last_post_at")
+    private LocalDateTime lastPostAt;
+
     /** Whether the room is muted for this user (no notifications) */
     @Column(name = "muted", nullable = false)
     private boolean muted = false;
@@ -78,12 +82,15 @@ public class ChatRoomMember {
     @Column(name = "is_enabled", nullable = false)
     private boolean isEnabled = true;
 
+    @Version
+    @Column(name = "version")
+    private Long version;
+
+
     @PrePersist
     public void prePersist() {
         if (membershipId == null) membershipId = UUID.randomUUID();
-        if (joinedAt == null) joinedAt = LocalDateTime.from(Instant.now());
-        // DB defaults: muted=false, is_enabled=true — mirror them if null
-        // (booleans default to false in Java; explicitly set enabled if you want true)
-        if (!this.isEnabled) this.isEnabled = true;
+        if (joinedAt == null) joinedAt = LocalDateTime.now(ZoneOffset.UTC);
+        // DO NOT override isEnabled here; default is set at field declaration.
     }
 }
