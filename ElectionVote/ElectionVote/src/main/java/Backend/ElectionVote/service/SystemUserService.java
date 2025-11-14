@@ -24,6 +24,13 @@ public interface SystemUserService {
     /** Create a user inside the CURRENT tenant and auto-create org_membership(is_enabled=true). */
     UserDto createInTenant(UserCreateRequest req);
 
+    UserDto createPlatformAdmin(UserCreateRequest req);
+
+    // system user (no tenant)
+    UserDto createTenantMemberRestricted(UserCreateRequest req); // tenant member, restricted roles
+
+    UserDto createTenantAdmin(UserCreateRequest req);
+
     /** Get a user if they belong to the CURRENT tenant (via membership). */
     Optional<UserDto> getInTenant(UUID userId);
 

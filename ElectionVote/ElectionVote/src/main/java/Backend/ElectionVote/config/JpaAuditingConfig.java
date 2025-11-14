@@ -7,22 +7,21 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 import java.util.Optional;
 
+/**
+ * Enables Spring Data JPA auditing and wires a production-ready AuditorAware
+ * that reads the authenticated principal from Spring Security.
+ */
 @Configuration
 @EnableJpaAuditing(auditorAwareRef = "auditorAware")
 public class JpaAuditingConfig {
 
+    /**
+     * AuditorAware that always resolves the current authenticated user's "name"
+     * (username/email) from Spring Security; falls back to "system" for
+     * batch jobs, async tasks, or early bootstrapping.
+     */
     @Bean
     public AuditorAware<String> auditorAware() {
-        // TODO: Replace with your auth context (e.g., Spring Security principal or tenant user)
-        return () -> Optional.ofNullable(CurrentUserHolder.getUsername()).or(() -> Optional.of("system"));
-    }
-
-
-    // Minimal stub so code compiles if you don’t have security yet:
-    static final class CurrentUserHolder {
-        static String getUsername() {
-            // integrate with SecurityContextHolder.getContext().getAuthentication().getName()
-            return null;
-        }
+        return new SecurityAuditorAware();
     }
 }

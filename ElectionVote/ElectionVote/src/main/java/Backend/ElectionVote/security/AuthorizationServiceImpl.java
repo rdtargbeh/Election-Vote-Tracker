@@ -13,7 +13,18 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-@Service
+
+/**
+ * Production implementation:
+ *  - Reads the current tenant from TenantContext (populated by TenantFilter)
+ *  - Reads current user id from CurrentUserProvider (SecurityContext/JWT)
+ *  - Verifies membership is enabled for this tenant
+ *  - Performs role checks (case-insensitive)
+ *
+ * Bean name is "authz" so you can use it from SpEL:
+ *   @PreAuthorize("@authz.hasAny('ADMIN','MODERATOR')")
+ */
+@Service("authz")
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AuthorizationServiceImpl implements AuthorizationService {
@@ -24,13 +35,17 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     @Override
     public OrgMembership requireMembership() {
         TenantContext ctx = TenantContext.get();
-        if (ctx == null) throw new AccessDeniedException("Tenant context missing");
+        if (ctx == null) {
+            throw new AccessDeniedException("Tenant context missing");
+        }
 
         if (ctx.isSystemAdmin()) {
+            // Synthetic membership for global admins so callers can proceed uniformly.
             return OrgMembership.systemAdmin(ctx.userId().orElse(null), ctx.orgId().orElse(null));
         }
 
-        UUID orgId = ctx.orgId().orElseThrow(() -> new AccessDeniedException("Tenant required"));
+        UUID orgId = ctx.orgId()
+                .orElseThrow(() -> new AccessDeniedException("Tenant required"));
         UUID userId = Optional.ofNullable(currentUser.currentUserId())
                 .orElseThrow(() -> new AccessDeniedException("Authentication required"));
 
@@ -51,10 +66,15 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         throw new AccessDeniedException("Insufficient role: requires any of " + Arrays.toString(roleNames));
     }
 
+
     @Override
     public boolean hasAny(String... roleNames) {
-        try { requireAny(roleNames); return true; }
-        catch (AccessDeniedException e) { return false; }
+        try {
+            requireAny(roleNames);
+            return true;
+        } catch (AccessDeniedException e) {
+            return false;
+        }
     }
 
     @Override
@@ -65,5 +85,15 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         } catch (AccessDeniedException e) {
             return Set.of();
         }
+    }
+
+    /* ---------------- helpers ---------------- */
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static boolean equalsIgnoreCaseNonNull(String a, String b) {
+        return b != null && a.equalsIgnoreCase(b);
     }
 }

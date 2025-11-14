@@ -16,5 +16,6 @@ public class ApiError {
     private final String error;               // stable short code (e.g., VALIDATION_ERROR)
     private final String message;             // human message
     private final String path;                // request URI
+    private final String rid;                 // request id (from MDC, for tracing)
     private final Map<String, String> fieldErrors; // optional field -> error (for validation)
 }

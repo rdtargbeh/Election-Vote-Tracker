@@ -52,7 +52,9 @@ public class SystemUser {
     @Column(name = "password_hash", nullable = false, columnDefinition = "TEXT")
     private String passwordHash;
 
-    /** Relationships **/
+    /**
+     * Relationships
+     **/
 
     // Role reference
     @ManyToOne(fetch = FetchType.LAZY)
@@ -73,7 +75,9 @@ public class SystemUser {
     @JoinColumn(name = "default_org_id", foreignKey = @ForeignKey(name = "fk_user_default_org"))
     private Organization defaultOrg;
 
-    /** Status flags **/
+    /**
+     * Status flags
+     **/
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
@@ -83,11 +87,15 @@ public class SystemUser {
     @Column(name = "is_system_admin", nullable = false)
     private boolean isSystemAdmin;  // maps to SQL boolean column
 
-    /** Audit fields **/
+    /**
+     * Audit fields
+     **/
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    /** Security / audit **/
+    /**
+     * Security / audit
+     **/
     @Column(name = "failed_login_attempts", nullable = false)
     private int failedLoginAttempts = 0;
 
@@ -105,155 +113,7 @@ public class SystemUser {
     // GETTER & SETTER
 
 
-    public UUID getUserId() {
-        return userId;
-    }
 
-    public void setUserId(UUID userId) {
-        this.userId = userId;
-    }
 
-    public String getFirstName() {
-        return firstName;
-    }
 
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
-
-    public String getLastName() {
-        return lastName;
-    }
-
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
-
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
-    public UserRole getRole() {
-        return role;
-    }
-
-    public void setRole(UserRole role) {
-        this.role = role;
-    }
-
-    public Party getParty() {
-        return party;
-    }
-
-    public void setParty(Party party) {
-        this.party = party;
-    }
-
-    public County getAssignedCounty() {
-        return assignedCounty;
-    }
-
-    public void setAssignedCounty(County assignedCounty) {
-        this.assignedCounty = assignedCounty;
-    }
-
-    public Organization getDefaultOrg() {
-        return defaultOrg;
-    }
-
-    public void setDefaultOrg(Organization defaultOrg) {
-        this.defaultOrg = defaultOrg;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-
-    public void setActive(boolean active) {
-        isActive = active;
-    }
-
-    public boolean isVerified() {
-        return isVerified;
-    }
-
-    public void setVerified(boolean verified) {
-        isVerified = verified;
-    }
-
-    public boolean isSystemAdmin() {
-        return isSystemAdmin;
-    }
-
-    public void setSystemAdmin(boolean systemAdmin) {
-        isSystemAdmin = systemAdmin;
-    }
-
-    public LocalDateTime getLastLogin() {
-        return lastLogin;
-    }
-
-    public void setLastLogin(LocalDateTime lastLogin) {
-        this.lastLogin = lastLogin;
-    }
-
-    public int getFailedLoginAttempts() {
-        return failedLoginAttempts;
-    }
-
-    public void setFailedLoginAttempts(int failedLoginAttempts) {
-        this.failedLoginAttempts = failedLoginAttempts;
-    }
-
-    public LocalDateTime getLockedUntil() {
-        return lockedUntil;
-    }
-
-    public void setLockedUntil(LocalDateTime lockedUntil) {
-        this.lockedUntil = lockedUntil;
-    }
-
-    public LocalDateTime getLastPasswordChange() {
-        return lastPasswordChange;
-    }
-
-    public void setLastPasswordChange(LocalDateTime lastPasswordChange) {
-        this.lastPasswordChange = lastPasswordChange;
-    }
-
-    public LocalDateTime getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(LocalDateTime dateCreated) {
-        this.dateCreated = dateCreated;
-    }
 }

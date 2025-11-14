@@ -8,6 +8,24 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+
+/**
+ * Aspect that synchronizes the current tenant context (Java thread)
+ * with PostgreSQL session variables used for Row-Level Security (RLS).
+ *
+ * For every @Transactional method:
+ *   - SET LOCAL app.current_org       = current tenant UUID (or empty)
+ *   - SET LOCAL app.is_system_admin   = 'true'/'false'
+ *
+ * These variables are scoped to the current DB connection/transaction,
+ * ensuring RLS policies are automatically enforced by Postgres.
+ *
+ * Example of matching Postgres RLS policy:
+ *   CREATE POLICY tenant_isolation ON vote_table
+ *   USING (organization_id::text = current_setting('app.current_org', true));
+ *
+ * The Aspect must run inside the same transaction context as the JPA session.
+ */
 @Aspect
 @Component
 @RequiredArgsConstructor
@@ -15,17 +33,47 @@ public class RlsTenantAspect {
 
     private final JdbcTemplate jdbc;
 
-    /** Runs before any @Transactional public method in your app packages. Adjust package pointcut if needed. */
+    /**
+     * Runs before any public @Transactional method within your application package.
+     * Adjust the package expression if your root package changes.
+     */
     @Before("execution(public * Backend.ElectionVote..*(..)) && @annotation(transactional)")
     public void setRlsVariables(Transactional transactional) {
         TenantContext ctx = TenantContext.get();
-        if (ctx == null) return;
+        if (ctx == null) {
+            // No tenant context for this thread → likely a public or system operation.
+            return;
+        }
 
-        String isAdmin = ctx.isSystemAdmin() ? "true" : "false";
-        String org     = ctx.orgId().map(Object::toString).orElse("");
+        String isAdmin = Boolean.toString(ctx.isSystemAdmin());
+        String org = ctx.orgId().map(Object::toString).orElse("");
 
-        // SET LOCAL is scoped to the current transaction/connection
-        jdbc.execute("SET LOCAL app.is_system_admin = '" + isAdmin + "'");
-        jdbc.execute("SET LOCAL app.current_org     = '" + org + "'");
+        // Use parameter binding to avoid SQL injection risk (even though values are local)
+        // SET LOCAL ensures the variables exist only within this transaction’s scope.
+        jdbc.update("SET LOCAL app.is_system_admin = ?", isAdmin);
+        jdbc.update("SET LOCAL app.current_org = ?", org);
     }
 }
+
+
+//@Aspect
+//@Component
+//@RequiredArgsConstructor
+//public class RlsTenantAspect {
+//
+//    private final JdbcTemplate jdbc;
+//
+//    /** Runs before any @Transactional public method in your app packages. Adjust package pointcut if needed. */
+//    @Before("execution(public * Backend.ElectionVote..*(..)) && @annotation(transactional)")
+//    public void setRlsVariables(Transactional transactional) {
+//        TenantContext ctx = TenantContext.get();
+//        if (ctx == null) return;
+//
+//        String isAdmin = ctx.isSystemAdmin() ? "true" : "false";
+//        String org     = ctx.orgId().map(Object::toString).orElse("");
+//
+//        // SET LOCAL is scoped to the current transaction/connection
+//        jdbc.execute("SET LOCAL app.is_system_admin = '" + isAdmin + "'");
+//        jdbc.execute("SET LOCAL app.current_org     = '" + org + "'");
+//    }
+//}

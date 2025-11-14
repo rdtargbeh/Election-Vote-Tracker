@@ -23,7 +23,7 @@ public class UserCreateRequest {
     @NotBlank @Size(max = 30)
     private String lastName;
 
-    @NotBlank @Email  @Size(max = 50)
+    @NotBlank @Size(max = 50)   // @Email -  must be a well-formed email address
     private String userName;
 
     @NotBlank @Size(min = 3, max = 30)

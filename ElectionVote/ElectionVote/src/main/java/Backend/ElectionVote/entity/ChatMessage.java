@@ -1,6 +1,7 @@
 package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.ChatMemberRole;
+import Backend.ElectionVote.security.BaseAuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;import org.hibernate.annotations.JdbcTypeCode;
@@ -32,7 +33,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ChatMessage {
+public class ChatMessage  extends BaseAuditedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)

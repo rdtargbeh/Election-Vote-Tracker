@@ -7,6 +7,7 @@ import Backend.ElectionVote.entity.*;
 import Backend.ElectionVote.enums.RoleName;
 import Backend.ElectionVote.mapper.UserMapper;
 import Backend.ElectionVote.repository.*;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.security.CurrentUserProvider;
 import Backend.ElectionVote.service.SystemUserService;
 import Backend.ElectionVote.utility.ChangePasswordRequest;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -43,13 +45,19 @@ public class SystemUserServiceImplementation implements SystemUserService {
     private final UserMapper mapper; // make this a @Component or MapStruct @Mapper(componentModel="spring")
     private final CurrentUserProvider currentUserProvider;
 
+    private final AuthorizationService authz;
+
     /* ======================= CREATE ======================= */
 
     @Override
     @Transactional
     public UserDto createInTenant(UserCreateRequest req) {
-        UUID orgId = requireTenant();
+        // Enforce caller roles first (org ADMIN or platform SYSTEM_ADMIN)
+        authz.requireAny("ADMIN", "SYSTEM_ADMIN");
 
+        final boolean callerIsSystemAdmin = authz.currentRoles().contains("SYSTEM_ADMIN");
+
+        UUID orgId = requireTenant(); // from TenantContext (X-Org-Id or subdomain)
         Organization tenant = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new NoSuchElementException("Organization not found"));
 
@@ -57,27 +65,105 @@ public class SystemUserServiceImplementation implements SystemUserService {
         ensureUniqueUsername(req.getUserName(), null);
 
         UserRole role = loadRole(req.getRoleName());
-        if (role.getRoleName() == RoleName.ADMIN && !callerIsPlatformAdmin()) {
-            throw new IllegalArgumentException("Not allowed to create ADMIN within a tenant");
+
+        // 1) Role elevation rules:
+        //    - Only SYSTEM_ADMIN can create ADMIN users.
+        if (role.getRoleName() == RoleName.ADMIN && !callerIsSystemAdmin) {
+            throw new IllegalArgumentException("Only system admin can create ADMIN users");
         }
 
-        // Party: explicit request value else fallback to tenant party
-        Party party = (req.getPartyId() != null)
-                ? loadParty(req.getPartyId())
-                : tenant.getParty();
+        // 2) Tenant containment rules:
+        //    - Org ADMIN may only create users in *current* tenant.
+        //    - SYSTEM_ADMIN may create in the current tenant (chosen via X-Org-Id).
+        //    - Prevent cross-tenant defaultOrg unless SYSTEM_ADMIN (and even then, prefer current org).
+        Organization defaultOrg = (req.getDefaultOrgId() != null)
+                ? organizationRepository.findById(req.getDefaultOrgId())
+                .orElseThrow(() -> new NoSuchElementException("Default organization not found"))
+                : tenant;
 
+        if (!callerIsSystemAdmin && !defaultOrg.getOrgId().equals(tenant.getOrgId())) {
+            throw new IllegalArgumentException("Org admin cannot assign user to another organization");
+        }
+
+        // 3) Party & County assignment (bound to current tenant unless SYSTEM_ADMIN needs cross-assign)
+        Party party = (req.getPartyId() != null) ? loadParty(req.getPartyId()) : tenant.getParty();
         County county = (req.getAssignedCountyId() != null) ? loadCounty(req.getAssignedCountyId()) : null;
 
-        Organization defaultOrg = (req.getDefaultOrgId() != null) ? loadOrg(req.getDefaultOrgId()) : tenant;
+        // (Optional) If your Party/County are tenant-scoped, validate they belong to 'tenant' here.
 
+        // 4) Credentials
         String encoded = encoder.encode(req.getPassword());
+
+        // 5) Build + save
         SystemUser entity = mapper.toEntity(req, role, party, county, defaultOrg, encoded);
         SystemUser saved  = systemUserRepository.save(entity);
 
-        ensureMembership(orgId, saved.getUserId(), role.getRoleName().name());
+        // 6) Ensure membership in the current tenant with requested role
+        ensureMembership(tenant.getOrgId(), saved.getUserId(), role.getRoleName().name());
 
         return toDto(saved);
     }
+
+    @Override
+    @Transactional
+    public UserDto createPlatformAdmin(UserCreateRequest req) {
+        // Unscoped platform user (no tenant). Allowed only during bootstrap or by controller guard (SYSTEM_ADMIN).
+        ensureUniqueEmail(req.getEmail(), null);
+        ensureUniqueUsername(req.getUserName(), null);
+
+        // Attach a least-privilege role just to satisfy the FK; platform authority is via isSystemAdmin=true.
+        // dynamic role from request, fallback to OBSERVER
+        UserRole baseRole = (req.getRoleName() != null)
+                ? loadRole(req.getRoleName())
+                : loadRole(RoleName.OBSERVER);
+
+        String encoded = encoder.encode(req.getPassword());
+
+        // Platform user: no party, county, or default org.
+        SystemUser entity = mapper.toEntity(req, baseRole, null, null, null, encoded);
+        entity.setSystemAdmin(true);     // <- platform owner capability
+        entity.setVerified(true);
+        entity.setActive(true);
+
+        // Optional but helpful hygiene
+        entity.setFailedLoginAttempts(0);
+        entity.setLockedUntil(null);
+        entity.setLastPasswordChange(LocalDateTime.now());
+
+        SystemUser saved = systemUserRepository.save(entity);
+
+        // NOTE: no OrgMembership is created for platform admins.
+        return toDto(saved);
+    }
+
+
+    @Override
+    @Transactional
+    public UserDto createTenantMemberRestricted(UserCreateRequest req) {
+        // Caller: PARTY_ADMIN/ADMIN/SYSTEM_ADMIN in tenant context
+        // Enforce target role whitelist
+        Set<RoleName> allowed = Set.of(
+                RoleName.AGENT, RoleName.SUPERVISOR, RoleName.DATA_ENTRY,
+                RoleName.OBSERVER, RoleName.COORDINATOR, RoleName.AUDITOR
+        );
+        RoleName target = req.getRoleName();
+        if (target == null || !allowed.contains(target)) {
+            throw new IllegalArgumentException("Role not allowed for tenant member creation");
+        }
+        // reuse your createInTenant path (which creates membership)
+        return createInTenant(req);
+    }
+
+    @Override
+    @Transactional
+    public UserDto createTenantAdmin(UserCreateRequest req) {
+        // Caller: SYSTEM_ADMIN (controller enforced)
+        if (req.getRoleName() != RoleName.ADMIN) {
+            throw new IllegalArgumentException("Role must be ADMIN for this endpoint");
+        }
+        return createInTenant(req);
+    }
+
 
     /* ======================= READ ======================= */
 
