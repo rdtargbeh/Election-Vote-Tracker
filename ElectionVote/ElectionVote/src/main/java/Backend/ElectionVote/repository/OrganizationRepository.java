@@ -19,7 +19,7 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     boolean existsBySubdomainIgnoreCaseAndOrgIdNot(String subdomain, UUID orgId);
 
-    boolean existsByParty_PartyId(UUID partyId);
+//    boolean existsByParty_PartyId(UUID partyId);
 
     boolean existsByOrgIdAndIsActiveTrue(UUID orgId);
 
@@ -39,9 +39,6 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
                               @Param("active") Boolean active,
                               @Param("type") OrganizationType type,
                               Pageable pageable);
-
-
-
 
 
 

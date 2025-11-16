@@ -16,7 +16,6 @@ public class OrganizationDto {
     private UUID orgId;
     private String orgName;
     private OrganizationType organizationType;
-    private UUID partyId;         // nullable
     private String logoUrl;
     private String primaryColor;
     private String subdomain;

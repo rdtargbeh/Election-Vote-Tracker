@@ -15,5 +15,6 @@ public class PartyDto {
     private String partyName;
     private String abbreviation;
     private String logoUrl;
+//    private UUID orgId;
 
 }

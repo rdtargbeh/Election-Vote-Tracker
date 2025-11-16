@@ -21,7 +21,5 @@ public interface OrganizationService {
 
     void setActive(UUID orgId, boolean active);
 
-    void assignParty(UUID orgId, UUID partyId);        // pass null to clear
-
     Optional<OrganizationDto> getBySubdomain(String subdomain);
 }

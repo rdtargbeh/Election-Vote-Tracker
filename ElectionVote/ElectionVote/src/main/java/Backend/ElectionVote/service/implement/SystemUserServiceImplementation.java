@@ -42,6 +42,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     private final OrganizationRepository organizationRepository;
     private final OrgMembershipRepository memberships;
     private final PasswordEncoder encoder;
+    private final OrgMembershipRepository orgMembershipRepository;
     private final UserMapper mapper; // make this a @Component or MapStruct @Mapper(componentModel="spring")
     private final CurrentUserProvider currentUserProvider;
 
@@ -49,60 +50,118 @@ public class SystemUserServiceImplementation implements SystemUserService {
 
     /* ======================= CREATE ======================= */
 
+
     @Override
     @Transactional
     public UserDto createInTenant(UserCreateRequest req) {
-        // Enforce caller roles first (org ADMIN or platform SYSTEM_ADMIN)
+        // 1) Caller must be tenant ADMIN or platform SYSTEM_ADMIN
         authz.requireAny("ADMIN", "SYSTEM_ADMIN");
 
         final boolean callerIsSystemAdmin = authz.currentRoles().contains("SYSTEM_ADMIN");
 
-        UUID orgId = requireTenant(); // from TenantContext (X-Org-Id or subdomain)
+        // 2) Resolve current tenant from TenantContext (X-Org-Id header or subdomain)
+        UUID orgId = requireTenant();
         Organization tenant = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new NoSuchElementException("Organization not found"));
-
+        // 3) Uniqueness checks
         ensureUniqueEmail(req.getEmail(), null);
         ensureUniqueUsername(req.getUserName(), null);
 
+        // 4) Base platform role
         UserRole role = loadRole(req.getRoleName());
 
-        // 1) Role elevation rules:
-        //    - Only SYSTEM_ADMIN can create ADMIN users.
         if (role.getRoleName() == RoleName.ADMIN && !callerIsSystemAdmin) {
             throw new IllegalArgumentException("Only system admin can create ADMIN users");
         }
+        // 5) Default organization
+        Organization defaultOrg;
+        if (req.getDefaultOrgId() != null) {
+            defaultOrg = organizationRepository.findById(req.getDefaultOrgId())
+                    .orElseThrow(() -> new NoSuchElementException("Default organization not found"));
 
-        // 2) Tenant containment rules:
-        //    - Org ADMIN may only create users in *current* tenant.
-        //    - SYSTEM_ADMIN may create in the current tenant (chosen via X-Org-Id).
-        //    - Prevent cross-tenant defaultOrg unless SYSTEM_ADMIN (and even then, prefer current org).
-        Organization defaultOrg = (req.getDefaultOrgId() != null)
-                ? organizationRepository.findById(req.getDefaultOrgId())
-                .orElseThrow(() -> new NoSuchElementException("Default organization not found"))
-                : tenant;
-
-        if (!callerIsSystemAdmin && !defaultOrg.getOrgId().equals(tenant.getOrgId())) {
-            throw new IllegalArgumentException("Org admin cannot assign user to another organization");
+            if (!callerIsSystemAdmin && !defaultOrg.getOrgId().equals(tenant.getOrgId())) {
+                throw new IllegalArgumentException("Org admin cannot assign user to another organization");
+            }
+        } else {
+            defaultOrg = tenant;
         }
+        // 6) Neutral user (no party, no county yet)
+        String encodedPassword = encoder.encode(req.getPassword());
 
-        // 3) Party & County assignment (bound to current tenant unless SYSTEM_ADMIN needs cross-assign)
-        Party party = (req.getPartyId() != null) ? loadParty(req.getPartyId()) : tenant.getParty();
-        County county = (req.getAssignedCountyId() != null) ? loadCounty(req.getAssignedCountyId()) : null;
+        SystemUser entity = mapper.toEntity(
+                req,
+                role,
+                null,          // party
+                null,          // county
+                defaultOrg,
+                encodedPassword
+        );
+        SystemUser saved = systemUserRepository.save(entity);
 
-        // (Optional) If your Party/County are tenant-scoped, validate they belong to 'tenant' here.
-
-        // 4) Credentials
-        String encoded = encoder.encode(req.getPassword());
-
-        // 5) Build + save
-        SystemUser entity = mapper.toEntity(req, role, party, county, defaultOrg, encoded);
-        SystemUser saved  = systemUserRepository.save(entity);
-
-        // 6) Ensure membership in the current tenant with requested role
+        // 7) HERE: user is added to org_membership for THIS tenant
         ensureMembership(tenant.getOrgId(), saved.getUserId(), role.getRoleName().name());
 
         return toDto(saved);
     }
+
+
+    @Override
+    @Transactional
+    public UserDto assignUserToCountyAndRole(UUID userId, UUID countyId, String roleName) {
+        // 1) Only tenant ADMIN or SYSTEM_ADMIN can do this
+        authz.requireAny("ADMIN", "SYSTEM_ADMIN");
+        boolean callerIsSystemAdmin = authz.currentRoles().contains("SYSTEM_ADMIN");
+
+        // 2) Current tenant (org)
+        UUID orgId = requireTenant();
+        Organization tenant = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
+
+        // 3) Load user & county
+        SystemUser user = systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        County county = countyRepository.findById(countyId)
+                .orElseThrow(() -> new NoSuchElementException("County not found"));
+
+        // 4) Ensure user belongs to this tenant (must have membership)
+        OrgMembership membership = orgMembershipRepository
+                .findByOrganization_OrgIdAndUser_UserId(tenant.getOrgId(), user.getUserId())
+                .orElseThrow(() -> new IllegalArgumentException("User is not a member of this organization"));
+
+        // 5) Validate roleName (tenant-scoped roles)
+        String normalizedRole = roleName == null ? null : roleName.trim().toUpperCase();
+        if (normalizedRole == null || normalizedRole.isBlank()) {
+            throw new IllegalArgumentException("Role name is required");
+        }
+
+        // Only allow tenant-scoped roles here (no SYSTEM_ADMIN via this API)
+        Set<String> allowedRoles = Set.of(
+                "ADMIN", "PARTY_ADMIN", "AGENT", "OBSERVER", "SUPERVISOR",
+                "COORDINATOR", "DATA_ENTRY"
+        );
+
+        if (!allowedRoles.contains(normalizedRole)) {
+            throw new IllegalArgumentException("Unsupported role for assignment: " + normalizedRole);
+        }
+
+        // Optional: prevent non-system-admin from assigning ADMIN at tenant level
+        if ("ADMIN".equals(normalizedRole) && !callerIsSystemAdmin) {
+            throw new IllegalArgumentException("Only system admin can assign ADMIN role");
+        }
+
+        // 6) Apply assignment
+        user.setAssignedCounty(county);          // James Doe → Nimba County
+        membership.setRoleName(normalizedRole);  // Role in this tenant → COORDINATOR
+
+        // JPA will flush changes at transaction commit, but you can be explicit:
+        systemUserRepository.save(user);
+        orgMembershipRepository.save(membership);
+
+        // 7) Return updated DTO
+        return toDto(user);
+    }
+
 
     @Override
     @Transactional
@@ -268,11 +327,11 @@ public class SystemUserServiceImplementation implements SystemUserService {
         SystemUser u = systemUserRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User not found"));
 
-        if (!encoder.matches(req.getCurrentPassword(), u.getPasswordHash())) {
+        if (!encoder.matches(req.getCurrentPassword(), u.getPassword())) {
             throw new IllegalArgumentException("Current password is incorrect");
         }
 
-        u.setPasswordHash(encoder.encode(req.getNewPassword()));
+        u.setPassword(encoder.encode(req.getNewPassword()));
         u.setLastPasswordChange(LocalDateTime.now());
         u.setFailedLoginAttempts(0);
         u.setLockedUntil(null);
@@ -283,7 +342,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
     public void adminResetPasswordInTenant(UUID userId, String newPassword) {
         UUID orgId = requireTenant();
         SystemUser u = loadTenantUser(orgId, userId);
-        u.setPasswordHash(encoder.encode(newPassword));
+        u.setPassword(encoder.encode(newPassword));
         u.setLastPasswordChange(LocalDateTime.now());
         u.setFailedLoginAttempts(0);
         u.setLockedUntil(null);

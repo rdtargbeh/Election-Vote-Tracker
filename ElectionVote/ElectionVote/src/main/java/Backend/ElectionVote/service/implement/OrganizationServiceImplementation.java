@@ -39,7 +39,7 @@ public class OrganizationServiceImplementation implements OrganizationService {
     @Override
     @Transactional // write Tx
     public OrganizationDto create(OrganizationCreateRequest req) {
-        // normalize
+        // normalize subdomain
         String sub = normalizeSubdomain(req.getSubdomain());
         if (sub != null) {
             // case-insensitive uniqueness
@@ -47,18 +47,16 @@ public class OrganizationServiceImplementation implements OrganizationService {
                 throw new IllegalArgumentException("Subdomain already in use");
             }
         }
+        // Map DTO → entity
         Organization org = mapper.toEntity(req);
         org.setSubdomain(sub); // ensure normalized value is persisted
 
-        // attach party if provided
-        if (req.getPartyId() != null) {
-            Party p = partyRepository.findById(req.getPartyId())
-                    .orElseThrow(() -> new NoSuchElementException("Party not found"));
-            org.setParty(p);
-        }
+        // ✅ NEW: Organization has NO party FK; just save org
         Organization saved = organizationRepository.save(org);
         return mapper.toDTO(saved);
     }
+
+
 
     @Override
     @Transactional(readOnly = true)
@@ -103,23 +101,10 @@ public class OrganizationServiceImplementation implements OrganizationService {
         // apply scalar changes via mapper (safe fields only)
         mapper.apply(req, org);
 
-        // PARTY: make this tri-state to avoid the “null means clear or missing?” ambiguity.
-        // Best DTO shape: Optional<UUID> partyId in OrganizationUpdateRequest
-        if (req.getPartyId() != null) {
-            // Treat explicit null as CLEAR; non-null as set
-            UUID partyId = req.getPartyId();
-            if (partyId == null) {
-                org.setParty(null);
-            } else {
-                Party p = partyRepository.findById(partyId)
-                        .orElseThrow(() -> new NoSuchElementException("Party not found"));
-                org.setParty(p);
-            }
-        }
-        // else: do not touch party if field absent
         Organization saved = organizationRepository.save(org);
         return mapper.toDTO(saved);
     }
+
 
     @Override
     @Transactional
@@ -129,23 +114,13 @@ public class OrganizationServiceImplementation implements OrganizationService {
         org.setActive(active);
     }
 
-    @Override
-    @Transactional
-    public void assignParty(UUID orgId, UUID partyId) {
-        Organization org = organizationRepository.findById(orgId)
-                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
-        if (partyId == null) {
-            org.setParty(null);
-        } else {
-            Party p = partyRepository.findById(partyId)
-                    .orElseThrow(() -> new NoSuchElementException("Party not found"));
-            org.setParty(p);
-        }
-    }
+
 
     private String normalizeSubdomain(String raw) {
         if (raw == null) return null;
         String s = raw.trim().toLowerCase();
         return s.isBlank() ? null : s;
     }
+
+
 }

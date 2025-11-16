@@ -1,10 +1,17 @@
 package Backend.ElectionVote.security;
 
 import Backend.ElectionVote.entity.OrgMembership;
+import Backend.ElectionVote.entity.SystemUser;
 import Backend.ElectionVote.repository.OrgMembershipRepository;
+import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.utility.TenantContext;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,8 +36,13 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AuthorizationServiceImpl implements AuthorizationService {
 
-    private final OrgMembershipRepository memberships;
-    private final CurrentUserProvider currentUser;
+    @Autowired
+    private OrgMembershipRepository memberships;
+    @Autowired
+    private CurrentUserProvider currentUser;
+    @Autowired
+    private SystemUserRepository systemUserRepository;
+
 
     @Override
     public OrgMembership requireMembership() {
@@ -66,7 +78,6 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         throw new AccessDeniedException("Insufficient role: requires any of " + Arrays.toString(roleNames));
     }
 
-
     @Override
     public boolean hasAny(String... roleNames) {
         try {
@@ -86,6 +97,55 @@ public class AuthorizationServiceImpl implements AuthorizationService {
             return Set.of();
         }
     }
+
+    // 🔹 NEW: platform-level admin guard (no tenant required)
+// 🔹 NEW: platform-level admin guard (no tenant required)
+    @Override
+    public void requirePlatformAdmin() {
+        TenantContext ctx = TenantContext.get();
+        // Prefer userId from TenantContext (set by TenantFilter if available)
+        UUID userId = (ctx != null) ? ctx.userId().orElse(null) : null;
+
+        // If we don't have a userId from TenantContext, try SecurityContext
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (userId == null) {
+            if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+                throw new AccessDeniedException("Authentication required");
+            }
+            // Best-effort parse from auth.getName()
+            try {
+                userId = UUID.fromString(auth.getName());
+            } catch (Exception ignored) {
+                // not a UUID, leave null
+            }
+        }
+
+        if (userId == null && (ctx == null || ctx.userId().isEmpty())) {
+            // no reliable user id found
+            throw new AccessDeniedException("Authentication required");
+        }
+
+        // Determine admin status: prefer TenantContext.isSystemAdmin() (set by TenantFilter)
+        boolean isAdmin = (ctx != null && ctx.isSystemAdmin());
+
+        // If TenantContext didn't indicate system admin, check SecurityContext authorities safely
+        if (!isAdmin) {
+            if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+                isAdmin = auth.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .anyMatch(a -> "ROLE_SYSTEM_ADMIN".equalsIgnoreCase(a)
+                                || "SYSTEM_ADMIN".equalsIgnoreCase(a)
+                                || (a != null && a.endsWith("SYSTEM_ADMIN")));
+            }
+        }
+
+        if (!isAdmin) {
+            throw new AccessDeniedException("Platform admin required");
+        }
+    }
+
+
+
 
     /* ---------------- helpers ---------------- */
 

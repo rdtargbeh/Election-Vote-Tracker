@@ -3,6 +3,7 @@ package Backend.ElectionVote.service.implement;
 import Backend.ElectionVote.dto.PartyCreateRequest;
 import Backend.ElectionVote.dto.PartyDto;
 import Backend.ElectionVote.dto.PartyUpdateRequest;
+import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.Party;
 import Backend.ElectionVote.mapper.PartyMapper;
 import Backend.ElectionVote.repository.OrganizationRepository;
@@ -34,22 +35,42 @@ public class PartyServiceImplementation implements PartyService {
     private OrganizationRepository organizationRepository;
     private final PartyMapper mapper = new PartyMapper();
 
+
     @Override
     public PartyDto create(PartyCreateRequest req) {
-        // friendly uniqueness checks
-        if (partyRepository.existsByPartyNameIgnoreCase(req.getPartyName()))
+        // 1) Friendly uniqueness checks (match global UNIQUE in SQL)
+        if (partyRepository.existsByPartyNameIgnoreCase(req.getPartyName())) {
             throw new IllegalArgumentException("Party name already exists");
-        if (partyRepository.existsByAbbreviationIgnoreCase(req.getAbbreviation()))
+        }
+        if (partyRepository.existsByAbbreviationIgnoreCase(req.getAbbreviation())) {
             throw new IllegalArgumentException("Abbreviation already exists");
+        }
 
+        // 2) Resolve current tenant (org) from TenantContext
+        var ctx = Backend.ElectionVote.utility.TenantContext.get();
+        if (ctx == null || ctx.orgId().isEmpty()) {
+            // This endpoint should be tenant-scoped (/api/party/** with X-Org-Id or subdomain)
+            throw new IllegalStateException("Tenant context is missing; cannot create party without organization");
+        }
+
+        UUID orgId = ctx.orgId().get();
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new NoSuchElementException("Organization not found: " + orgId));
+
+        // 3) Map DTO → entity + attach organization
         Party entity = mapper.toEntity(req);
+        entity.setOrganization(org);
+
         try {
-            return mapper.toDTO(partyRepository.save(entity));
+            Party saved = partyRepository.save(entity);
+            return mapper.toDTO(saved);
         } catch (DataIntegrityViolationException e) {
-            // race protection
+            // 4) Race protection for UNIQUE constraints
             throw new IllegalArgumentException("Party name or abbreviation already exists");
         }
     }
+
+
 
     @Override
     @Transactional(readOnly = true)
@@ -92,17 +113,12 @@ public class PartyServiceImplementation implements PartyService {
         return mapper.toDTO(p);
     }
 
+
     @Override
     public void delete(UUID partyId) {
         Party p = partyRepository.findById(partyId)
                 .orElseThrow(() -> new NoSuchElementException("Party not found"));
-
-        // Guard: prevent delete if any org references this party
-        boolean inUse = organizationRepository.existsByParty_PartyId(partyId); // add this method in OrganizationRepository
-        if (inUse) {
-            throw new IllegalStateException("Cannot delete party that is referenced by organizations");
-        }
-
         partyRepository.delete(p);
     }
+
 }

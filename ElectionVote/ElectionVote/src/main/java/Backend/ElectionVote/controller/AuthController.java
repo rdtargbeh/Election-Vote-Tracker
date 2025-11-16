@@ -1,62 +1,64 @@
 package Backend.ElectionVote.controller;
 
+
 import Backend.ElectionVote.security.TokenService;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-import java.util.UUID;
+
 
 @RestController
-@RequestMapping("/api/public")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthenticationManager authManager;
-    private final TokenService tokens;
+    private final TokenService tokenService;
 
-    public record LoginRequest(String username, String password) {}
+    // This is the DTO Jackson will bind to
+    public record LoginRequest(String userName, String password) { }
 
+    public record TokenResponse(String access_token, long expires_in, String token_type) { }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
-        if (req == null || req.username() == null || req.password() == null) {
-            throw new BadCredentialsException("Invalid credentials");
-        }
+    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest req) {
 
+        System.out.println("Login attempt identifier=" + req.userName()
+                + ", passwordNull=" + (req.password() == null));
+
+
+        // identifier = email or username; AuthUserDetailsService already supports both
         Authentication auth = authManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.username(), req.password())
+                new UsernamePasswordAuthenticationToken(req.userName(), req.password())
         );
 
-        // At this point user is authenticated by your UserDetailsService.
-        // Derive a UUID userId from your principal or username. If your usernames are emails, you likely map them to a DB userId.
-        UUID userId = extractUserId(auth); // implement below as needed
-        String username = auth.getName();
-        boolean isSystemAdmin = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_SYSTEM_ADMIN".equalsIgnoreCase(a.getAuthority()));
+        SecurityContextHolder.getContext().setAuthentication(auth);
 
-        String token = tokens.issueAccessToken(userId, username, isSystemAdmin);
-        return ResponseEntity.ok(Map.of("access_token", token, "token_type", "Bearer"));
+        String jwt = tokenService.mintAccessToken(auth);
+        return ResponseEntity.ok(new AuthResponse(jwt, tokenService.expiresInSeconds()));
     }
 
-    private UUID extractUserId(Authentication auth) {
-        // If your principal exposes getUserId(): reflect or cast and return it.
-        // Fallback: derive UUID from username if you use UUID usernames, otherwise look it up from DB.
-        try {
-            var m = auth.getPrincipal().getClass().getMethod("getUserId");
-            Object v = m.invoke(auth.getPrincipal());
-            if (v instanceof UUID u) return u;
-            if (v instanceof String s) return UUID.fromString(s);
-        } catch (Exception ignored) {}
-        // LAST RESORT ONLY (replace with real DB lookup for your users):
-        try { return UUID.fromString(auth.getName()); } catch (Exception e) { return UUID.nameUUIDFromBytes(auth.getName().getBytes()); }
+    @Getter
+    @AllArgsConstructor
+    static class AuthResponse {
+        private String accessToken;
+        private long expiresIn;
     }
+
+
+
+
 }
+
+
+

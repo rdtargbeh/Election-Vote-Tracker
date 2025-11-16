@@ -16,7 +16,6 @@ public class OrganizationMapper {
         dto.setOrgId(org.getOrgId());
         dto.setOrgName(org.getOrgName());
         dto.setOrganizationType(org.getOrganizationType());
-        dto.setPartyId(org.getParty() != null ? org.getParty().getPartyId() : null);
         dto.setLogoUrl(org.getLogoUrl());
         dto.setPrimaryColor(org.getPrimaryColor());
         dto.setSubdomain(org.getSubdomain());
@@ -34,7 +33,7 @@ public class OrganizationMapper {
         org.setLogoUrl(req.getLogoUrl());
         org.setPrimaryColor(req.getPrimaryColor());
         org.setSubdomain(req.getSubdomain());
-        // isActive default = true in entity
+        org.setActive(req.getIsActive());
         return org;
     }
 

@@ -50,7 +50,7 @@ public class SystemUser {
     private String phoneNumber;
 
     @Column(name = "password_hash", nullable = false, columnDefinition = "TEXT")
-    private String passwordHash;
+    private String password;
 
     /**
      * Relationships

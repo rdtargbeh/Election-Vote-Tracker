@@ -1,6 +1,7 @@
 package Backend.ElectionVote.repository;
 
 import Backend.ElectionVote.entity.OrgMembership;
+import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.Party;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,4 +30,6 @@ public interface PartyRepository extends JpaRepository<Party, UUID> {
                   lower(p.abbreviation) like lower(concat('%', :q, '%')))
            """)
     Page<Party> search(@Param("q") String q, Pageable pageable);
+
+
 }

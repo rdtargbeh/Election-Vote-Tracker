@@ -65,13 +65,6 @@ public class OrganizationController {
         organizationService.setActive(id, body.active());
     }
 
-    @PatchMapping("/{id}/party")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void assignParty(@PathVariable UUID id, @RequestBody AssignPartyRequest body) {
-        // pass null to clear
-        organizationService.assignParty(id, body == null ? null : body.partyId());
-    }
-
     public record SetActiveRequest(@NotNull Boolean active) {}
     public record AssignPartyRequest(UUID partyId) {}
 }

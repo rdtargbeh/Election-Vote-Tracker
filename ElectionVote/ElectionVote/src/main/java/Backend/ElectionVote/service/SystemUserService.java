@@ -40,6 +40,7 @@ public interface SystemUserService {
     /** Update scalar fields for a tenant user (re-checks uniqueness on email/username). */
     UserDto updateInTenant(UUID userId, UserUpdateRequest req);
 
+    UserDto assignUserToCountyAndRole(UUID userId, UUID countyId, String roleName);
 
     /* ======================= Status Flags ======================= */
 

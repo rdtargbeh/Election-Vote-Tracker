@@ -48,4 +48,6 @@ public interface AuthorizationService {
      * Returns empty set when unauthenticated or not a member.
      */
     Set<String> currentRoles();
+
+    void requirePlatformAdmin();
 }

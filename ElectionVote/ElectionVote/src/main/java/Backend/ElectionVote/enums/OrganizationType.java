@@ -1,8 +1,9 @@
 package Backend.ElectionVote.enums;
 
 public enum OrganizationType {
-    PARTY,
+    POLITICAL_PARTY,
     COALITION,
+    NEC,
     NGO,
     MEDIA,
     OTHER

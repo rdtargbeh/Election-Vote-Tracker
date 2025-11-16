@@ -14,11 +14,11 @@ import java.util.UUID;
 public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, JpaSpecificationExecutor<SystemUser> {
 
     Optional<SystemUser> findByEmailIgnoreCase(String email);
+
     Optional<SystemUser> findByUserNameIgnoreCase(String userName);
 
     @Query("select coalesce(su.isSystemAdmin, false) from SystemUser su where su.userId = ?1")
     boolean isSystemAdmin(UUID userId);
-
 
     boolean existsByEmailIgnoreCase(String email);
 

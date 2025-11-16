@@ -14,13 +14,11 @@ import java.util.UUID;
 public class OrganizationCreateRequest {
 
     @NotBlank
-    @Size(max = 100)
+    @Size(max = 120)
     private String orgName;
 
     @NotNull
     private OrganizationType organizationType;
-
-    private UUID partyId; // optional, only meaningful if type == PARTY or COALITION
 
     @Size(max = 63)
     private String subdomain; // optional but must be unique if provided
@@ -30,5 +28,7 @@ public class OrganizationCreateRequest {
 
     @Size(max = 9)
     private String primaryColor;
+
+    private Boolean isActive;
 
 }

@@ -64,7 +64,7 @@ public class UserMapper {
                                String encodedPassword) {
         if (req == null) return null;
         SystemUser u = toEntity(req);
-        u.setPasswordHash(encodedPassword); // already encoded by service
+        u.setPassword(encodedPassword); // already encoded by service
         u.setRole(role);
         u.setParty(party);
         u.setAssignedCounty(county);

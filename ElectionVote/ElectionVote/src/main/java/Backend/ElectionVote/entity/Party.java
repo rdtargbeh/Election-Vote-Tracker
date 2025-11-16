@@ -36,37 +36,13 @@ public class Party {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    /** Each party belongs to ONE organization (tenant) */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "org_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "party_org_id_fkey"))
+    private Organization organization;
 
     // GETTER & SETTER
-    public UUID getPartyId() {
-        return partyId;
-    }
 
-    public void setPartyId(UUID partyId) {
-        this.partyId = partyId;
-    }
-
-    public String getPartyName() {
-        return partyName;
-    }
-
-    public void setPartyName(String partyName) {
-        this.partyName = partyName;
-    }
-
-    public String getAbbreviation() {
-        return abbreviation;
-    }
-
-    public void setAbbreviation(String abbreviation) {
-        this.abbreviation = abbreviation;
-    }
-
-    public String getLogoUrl() {
-        return logoUrl;
-    }
-
-    public void setLogoUrl(String logoUrl) {
-        this.logoUrl = logoUrl;
-    }
 }

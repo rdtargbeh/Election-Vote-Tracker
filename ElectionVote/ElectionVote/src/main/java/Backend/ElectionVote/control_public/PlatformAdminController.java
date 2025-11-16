@@ -20,10 +20,11 @@ public class PlatformAdminController {
     private final OrganizationService organizationService;
     private final SystemUserService systemUserService;
 
+
     @PostMapping("/organizations")
     @ResponseStatus(HttpStatus.CREATED)
     public OrganizationDto createOrganization(@RequestBody @Valid OrganizationCreateRequest req) {
-        authz.requireAny("SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         return organizationService.create(req);
     }
 

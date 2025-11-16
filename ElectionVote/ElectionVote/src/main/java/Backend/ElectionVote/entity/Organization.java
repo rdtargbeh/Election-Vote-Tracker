@@ -39,11 +39,6 @@ public class Organization {
     @Column(name = "org_type", nullable = false, length = 30)
     private OrganizationType organizationType;
 
-    /** Optional link to a Party (only for party tenants) */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "party_id", foreignKey = @ForeignKey(name = "organization_party_id_fkey"))
-    private Party party;
-
     /** Branding & whitelabel */
     @Column(name = "logo_url")
     private String logoUrl;

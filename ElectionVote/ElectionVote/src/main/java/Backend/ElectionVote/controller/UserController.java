@@ -5,6 +5,7 @@ import Backend.ElectionVote.dto.UserDto;
 import Backend.ElectionVote.dto.UserUpdateRequest;
 import Backend.ElectionVote.enums.RoleName;
 import Backend.ElectionVote.service.SystemUserService;
+import Backend.ElectionVote.utility.AssignCountyRoleRequest;
 import Backend.ElectionVote.utility.ChangePasswordRequest;
 import Backend.ElectionVote.utility.UserSearchRequest;
 import jakarta.validation.Valid;
@@ -47,6 +48,29 @@ public class UserController {
         Optional<UserDto> user = systemUserService.getInTenant(id);
         return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+
+    /**
+     * Assign a tenant user to a county and a tenant-scoped role
+     * (e.g., "COORDINATOR" for Nimba County).
+     *
+     * Security:
+     *  - Only tenant ADMIN or platform SYSTEM_ADMIN can call this.
+     *  - Tenant is derived from X-Org-Id / subdomain (TenantContext).
+     */
+    @PatchMapping("/{userId}/assign-county-role")
+    public ResponseEntity<UserDto> assignUserToCountyAndRole(
+            @PathVariable("userId") UUID userId,
+            @RequestBody AssignCountyRoleRequest req
+    ) {
+        UserDto updated = systemUserService.assignUserToCountyAndRole(
+                userId,
+                req.getCountyId(),
+                req.getRoleName()
+        );
+        return ResponseEntity.ok(updated);
+    }
+
 
     @GetMapping
     public Page<UserDto> search(

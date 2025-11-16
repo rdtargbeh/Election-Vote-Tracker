@@ -1,7 +1,5 @@
 package Backend.ElectionVote.control_public;
 
-import Backend.ElectionVote.dto.OrganizationCreateRequest;
-import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.UserCreateRequest;
 import Backend.ElectionVote.dto.UserDto;
 import Backend.ElectionVote.security.AuthorizationService;
@@ -10,6 +8,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 
 @RestController
@@ -34,4 +34,9 @@ public class TenantUserController {
         authz.requireAny("SYSTEM_ADMIN");
         return systemUserService.createTenantAdmin(req);
     }
+
+
+
+
+
 }
