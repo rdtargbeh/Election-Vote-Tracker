@@ -33,6 +33,7 @@ public class TenantUserController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UserDto createMember(@RequestBody @Valid UserCreateRequest req) {
+        // Caller must be a tenant PARTY_ADMIN, ADMIN, or platform SYSTEM_ADMIN
         authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
         return systemUserService.createTenantMemberRestricted(req);
     }
@@ -58,14 +59,6 @@ public class TenantUserController {
         authz.requirePlatformAdmin();
         return systemUserService.createTenantAdmin(req);
     }
-
-
-//    @PostMapping("/admins")
-//    @ResponseStatus(HttpStatus.CREATED)
-//    public UserDto createTenantAdmin(@RequestBody @Valid UserCreateRequest req) {
-//        authz.requireAny("SYSTEM_ADMIN");
-//        return systemUserService.createTenantAdmin(req);
-//    }
 
 
 

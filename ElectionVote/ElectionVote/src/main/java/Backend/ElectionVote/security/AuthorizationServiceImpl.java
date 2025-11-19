@@ -46,6 +46,7 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     private SystemUserRepository systemUserRepository;
 
 
+
     @Override
     public OrgMembership requireMembership() {
         TenantContext ctx = TenantContext.get();
@@ -53,16 +54,76 @@ public class AuthorizationServiceImpl implements AuthorizationService {
             throw new AccessDeniedException("Tenant context missing");
         }
 
+        // 1) Platform SYSTEM_ADMIN: synthetic membership (no real org_membership row required)
         if (ctx.isSystemAdmin()) {
-            // Synthetic membership for global admins so callers can proceed uniformly.
-            return OrgMembership.systemAdmin(ctx.userId().orElse(null), ctx.orgId().orElse(null));
+            return OrgMembership.systemAdmin(
+                    ctx.userId().orElse(null),
+                    ctx.orgId().orElse(null)
+            );
         }
 
+        // 2) Tenant must be present
         UUID orgId = ctx.orgId()
                 .orElseThrow(() -> new AccessDeniedException("Tenant required"));
-        UUID userId = Optional.ofNullable(currentUser.currentUserId())
-                .orElseThrow(() -> new AccessDeniedException("Authentication required"));
 
+        // 3) Resolve userId in three steps:
+        //    (a) from TenantContext
+        //    (b) from CurrentUserProvider
+        //    (c) from Authentication (username/email → SystemUser lookup)
+        UUID userId = ctx.userId().orElse(null);
+
+        if (userId == null) {
+            userId = currentUser.currentUserId();
+        }
+
+        if (userId == null) {
+            // Fallback: inspect SecurityContext directly
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+                throw new AccessDeniedException("Authentication required");
+            }
+
+            // Try to infer identifier (username/email) from Authentication
+            String identifier = null;
+
+            Object principal = auth.getPrincipal();
+            if (principal instanceof org.springframework.security.core.userdetails.UserDetails ud) {
+                identifier = ud.getUsername();
+            } else if (principal instanceof Jwt jwt) {
+                // Prefer explicit claims if present
+                Object u = jwt.getClaims().get("userName");
+                if (u instanceof String s && !s.isBlank()) {
+                    identifier = s;
+                } else {
+                    Object email = jwt.getClaims().get("email");
+                    if (email instanceof String s && !s.isBlank()) {
+                        identifier = s;
+                    } else {
+                        identifier = auth.getName(); // fallback: subject / name
+                    }
+                }
+            } else {
+                identifier = auth.getName();
+            }
+
+            if (identifier == null || identifier.isBlank()) {
+                throw new AccessDeniedException("Authentication required");
+            }
+
+            // Make identifier effectively final for lambdas
+            final String idFinal = identifier;
+
+            // Lookup SystemUser by username first, then by email
+            SystemUser user = systemUserRepository.findByUserNameIgnoreCase(idFinal)
+                    .orElseGet(() ->
+                            systemUserRepository.findByEmailIgnoreCase(idFinal)
+                                    .orElseThrow(() -> new AccessDeniedException("Authentication required"))
+                    );
+
+            userId = user.getUserId();
+        }
+
+        // 4) Require an enabled membership for this tenant + user
         return memberships.findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(orgId, userId)
                 .orElseThrow(() -> new AccessDeniedException("Not a member of this organization or membership disabled"));
     }
@@ -80,6 +141,48 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         }
         throw new AccessDeniedException("Insufficient role: requires any of " + Arrays.toString(roleNames));
     }
+
+
+
+//    @Override
+//    public OrgMembership requireMembership() {
+//        TenantContext ctx = TenantContext.get();
+//        if (ctx == null) {
+//            throw new AccessDeniedException("Tenant context missing");
+//        }
+//        // If current caller is a platform system admin, synthesize a membership
+//        if (ctx.isSystemAdmin()) {
+//            return OrgMembership.systemAdmin(
+//                    ctx.userId().orElse(null),
+//                    ctx.orgId().orElse(null)
+//            );
+//        }
+//        UUID orgId = ctx.orgId()
+//                .orElseThrow(() -> new AccessDeniedException("Tenant required"));
+//        // Prefer userId from TenantContext; fallback to CurrentUserProvider
+//        UUID userId = ctx.userId().orElseGet(() ->
+//                Optional.ofNullable(currentUser.currentUserId())
+//                        .orElseThrow(() -> new AccessDeniedException("Authentication required"))
+//        );
+//        return memberships.findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(orgId, userId)
+//                .orElseThrow(() -> new AccessDeniedException("Not a member of this organization or membership disabled"));
+//    }
+//
+//
+//    @Override
+//    public OrgMembership requireAny(String... roleNames) {
+//        OrgMembership m = requireMembership();
+//        if (m.isSystemAdmin()) return m;
+//        if (roleNames == null || roleNames.length == 0) return m;
+//
+//        String have = m.getRoleName();
+//        for (String want : roleNames) {
+//            if (want != null && want.equalsIgnoreCase(have)) return m;
+//        }
+//        throw new AccessDeniedException("Insufficient role: requires any of " + Arrays.toString(roleNames));
+//    }
+
+
 
     @Override
     public boolean hasAny(String... roleNames) {
@@ -110,7 +213,6 @@ public void requirePlatformAdmin() {
     if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
         throw new AuthenticationCredentialsNotFoundException("Authentication required");
     }
-
     boolean isAdmin = false;
 
     Object principal = auth.getPrincipal();
@@ -118,7 +220,6 @@ public void requirePlatformAdmin() {
     // ---- Case 1: JwtAuthenticationToken (most common with resource server) ----
     if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
         Jwt jwt = jwtAuth.getToken();
-
         // (a) Prefer the JWT claim: isSystemAdmin
         Object claimVal = jwt.getClaims().get("isSystemAdmin");
         if (claimVal instanceof Boolean b) {
@@ -126,7 +227,6 @@ public void requirePlatformAdmin() {
         } else if (claimVal instanceof String s) {
             isAdmin = Boolean.parseBoolean(s);
         }
-
         // (b) Fallback: check authorities that end with SYSTEM_ADMIN (ROLE_SYSTEM_ADMIN, SYSTEM_ADMIN, etc.)
         if (!isAdmin) {
             isAdmin = jwtAuth.getAuthorities().stream()
@@ -134,7 +234,6 @@ public void requirePlatformAdmin() {
                     .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
         }
     }
-
     // ---- Case 2: principal itself is a Jwt ----
     else if (principal instanceof Jwt jwt) {
         Object claimVal = jwt.getClaims().get("isSystemAdmin");
@@ -143,21 +242,18 @@ public void requirePlatformAdmin() {
         } else if (claimVal instanceof String s) {
             isAdmin = Boolean.parseBoolean(s);
         }
-
         if (!isAdmin) {
             isAdmin = auth.getAuthorities().stream()
                     .map(GrantedAuthority::getAuthority)
                     .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
         }
     }
-
     // ---- Case 3: Anything else (local dev, username/password, etc.) ----
     else {
         isAdmin = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
     }
-
     if (!isAdmin) {
         throw new AccessDeniedException("Platform admin required");
     }
