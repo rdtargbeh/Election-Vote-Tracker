@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/public/bootstrap")
 @RequiredArgsConstructor
 public class PublicBootstrapController {
+
     private final SystemUserRepository users;
     private final SystemUserService systemUserService;
 
@@ -28,4 +29,5 @@ public class PublicBootstrapController {
         assertBootstrapOpen();
         return systemUserService.createPlatformAdmin(req); // sets isSystemAdmin = true
     }
+
 }

@@ -67,6 +67,7 @@ public class AuthorizationServiceImpl implements AuthorizationService {
                 .orElseThrow(() -> new AccessDeniedException("Not a member of this organization or membership disabled"));
     }
 
+
     @Override
     public OrgMembership requireAny(String... roleNames) {
         OrgMembership m = requireMembership();

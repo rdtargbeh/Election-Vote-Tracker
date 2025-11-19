@@ -16,22 +16,38 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/platform")
 @RequiredArgsConstructor
 public class PlatformAdminController {
+
+
     private final AuthorizationService authz;
     private final OrganizationService organizationService;
     private final SystemUserService systemUserService;
 
 
+    /**
+     * Create a new organization (tenant).
+     * Only SYSTEM_ADMIN (platform admin) can do this.
+     */
     @PostMapping("/organizations")
     @ResponseStatus(HttpStatus.CREATED)
     public OrganizationDto createOrganization(@RequestBody @Valid OrganizationCreateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requirePlatformAdmin(); // uses TenantContext / token to ensure SYSTEM_ADMIN
         return organizationService.create(req);
     }
 
+
+    /**
+     * Create a global/system user (not bound to a specific org).
+     *
+     * - If req.roleName = SYSTEM_ADMIN → user.systemAdmin = true (platform owner).
+     * - Other roles → global users, systemAdmin = false.
+     */
     @PostMapping("/system-users")
     @ResponseStatus(HttpStatus.CREATED)
     public UserDto createSystemUser(@RequestBody @Valid UserCreateRequest req) {
         authz.requireAny("SYSTEM_ADMIN");
-        return systemUserService.createPlatformAdmin(req); // no membership
+        return systemUserService.createPlatformAdmin(req);
     }
+
+
+
 }
