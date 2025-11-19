@@ -21,6 +21,14 @@ public class OrganizationMapper {
         dto.setSubdomain(org.getSubdomain());
         dto.setActive(org.isActive());
         dto.setDateCreated(org.getDateCreated());
+
+        // map party
+        if (org.getParty() != null) {
+            dto.setPartyId(org.getParty().getPartyId());
+            dto.setPartyName(org.getParty().getPartyName());
+            dto.setPartyAbbreviation(org.getParty().getAbbreviation());
+        }
+
         return dto;
     }
 

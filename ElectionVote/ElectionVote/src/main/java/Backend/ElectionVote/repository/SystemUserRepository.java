@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -66,5 +67,10 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
                                   Pageable pageable);
 
 
+
+    // User Session
+    @Modifying
+    @Query("UPDATE UserSession s SET s.revoked = true WHERE s.orgId = :orgId")
+    void revokeAllForOrg(@Param("orgId") UUID orgId);
 
 }

@@ -4,6 +4,9 @@ import Backend.ElectionVote.entity.OrgMembership;
 import Backend.ElectionVote.entity.UserRole;
 import Backend.ElectionVote.enums.RoleName;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.UUID;

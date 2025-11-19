@@ -109,60 +109,6 @@ public class SystemUserServiceImplementation implements SystemUserService {
     }
 
 
-//    @Override
-//    @Transactional
-//    public UserDto createInTenant(UserCreateRequest req) {
-//        // 1) Caller must be tenant ADMIN or platform SYSTEM_ADMIN
-//        authz.requireAny("ADMIN", "SYSTEM_ADMIN");
-//
-//        final boolean callerIsSystemAdmin = authz.currentRoles().contains("SYSTEM_ADMIN");
-//
-//        // 2) Resolve current tenant from TenantContext (X-Org-Id header or subdomain)
-//        UUID orgId = requireTenant();
-//        Organization tenant = organizationRepository.findById(orgId)
-//                .orElseThrow(() -> new NoSuchElementException("Organization not found"));
-//        // 3) Uniqueness checks
-//        ensureUniqueEmail(req.getEmail(), null);
-//        ensureUniqueUsername(req.getUserName(), null);
-//
-//        // 4) Base platform role
-//        UserRole role = loadRole(req.getRoleName());
-//
-//        if (role.getRoleName() == RoleName.ADMIN && !callerIsSystemAdmin) {
-//            throw new IllegalArgumentException("Only system admin can create ADMIN users");
-//        }
-//        // 5) Default organization
-//        Organization defaultOrg;
-//        if (req.getDefaultOrgId() != null) {
-//            defaultOrg = organizationRepository.findById(req.getDefaultOrgId())
-//                    .orElseThrow(() -> new NoSuchElementException("Default organization not found"));
-//
-//            if (!callerIsSystemAdmin && !defaultOrg.getOrgId().equals(tenant.getOrgId())) {
-//                throw new IllegalArgumentException("Org admin cannot assign user to another organization");
-//            }
-//        } else {
-//            defaultOrg = tenant;
-//        }
-//        // 6) Neutral user (no party, no county yet)
-//        String encodedPassword = encoder.encode(req.getPassword());
-//
-//        SystemUser entity = mapper.toEntity(
-//                req,
-//                role,
-//                null,          // party
-//                null,          // county
-//                defaultOrg,
-//                encodedPassword
-//        );
-//        SystemUser saved = systemUserRepository.save(entity);
-//
-//        // 7) HERE: user is added to org_membership for THIS tenant
-//        ensureMembership(tenant.getOrgId(), saved.getUserId(), role.getRoleName().name());
-//
-//        return toDto(saved);
-//    }
-
-
     @Override
     @Transactional
     public UserDto createTenantMemberRestricted(UserCreateRequest req) {

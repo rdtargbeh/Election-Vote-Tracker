@@ -16,8 +16,11 @@ public class PartyMapper {
                 .partyName(p.getPartyName())
                 .abbreviation(p.getAbbreviation())
                 .logoUrl(p.getLogoUrl())
+                .dateCreated(p.getDateCreated())
+                .dateUpdated(p.getDateUpdated())
                 .build();
     }
+
 
     public Party toEntity(PartyCreateRequest req) {
         if (req == null) return null;

@@ -2,6 +2,7 @@ package Backend.ElectionVote.dto;
 
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -15,6 +16,7 @@ public class PartyDto {
     private String partyName;
     private String abbreviation;
     private String logoUrl;
-//    private UUID orgId;
+    private LocalDateTime dateCreated;
+    private LocalDateTime dateUpdated;
 
 }

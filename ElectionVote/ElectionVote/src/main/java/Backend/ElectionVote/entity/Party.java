@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -36,12 +37,22 @@ public class Party {
     @Column(name = "logo_url")
     private String logoUrl;
 
-    /** Each party belongs to ONE organization (tenant) */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "org_id",
-            nullable = false,
-            foreignKey = @ForeignKey(name = "party_org_id_fkey"))
-    private Organization organization;
+    @Column(name = "date_created", updatable = false)
+    private LocalDateTime dateCreated;
+
+    @Column(name = "date_updated")
+    private LocalDateTime dateUpdated;
+
+    @PrePersist
+    void prePersist() {
+        if (dateCreated == null) dateCreated = LocalDateTime.now();
+        if (dateUpdated == null) dateUpdated = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        dateUpdated = LocalDateTime.now();
+    }
 
     // GETTER & SETTER
 

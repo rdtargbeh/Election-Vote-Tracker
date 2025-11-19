@@ -5,6 +5,7 @@ import Backend.ElectionVote.entity.Organization;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -46,4 +47,10 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
                                     @Param("role") String roleName,
                                     @Param("enabled") Boolean enabled,
                                     Pageable pageable);
+
+
+    // Disable Org Member
+    @Modifying
+    @Query("UPDATE OrgMembership m SET m.enabled = false WHERE m.organization.orgId = :orgId")
+    void disableAllForOrg(@Param("orgId") UUID orgId);
 }

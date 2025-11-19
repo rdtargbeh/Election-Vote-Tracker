@@ -31,4 +31,6 @@ public class OrganizationCreateRequest {
 
     private Boolean isActive;
 
+    private UUID partyId;
+
 }

@@ -7,8 +7,10 @@ import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.Party;
 import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.mapper.OrganizationMapper;
+import Backend.ElectionVote.repository.OrgMembershipRepository;
 import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.PartyRepository;
+import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import Backend.ElectionVote.utility.QueryUtils;
@@ -32,6 +34,10 @@ public class OrganizationServiceImplementation implements OrganizationService {
     private  OrganizationRepository organizationRepository;
     @Autowired
     private  PartyRepository partyRepository;
+    @Autowired
+    private SystemUserRepository systemUserRepository;
+    @Autowired
+    private OrgMembershipRepository orgMembershipRepository;
 
     private final OrganizationMapper mapper = new OrganizationMapper();
 
@@ -39,19 +45,26 @@ public class OrganizationServiceImplementation implements OrganizationService {
     @Override
     @Transactional // write Tx
     public OrganizationDto create(OrganizationCreateRequest req) {
-        // normalize subdomain
+        // 1) Normalize subdomain
         String sub = normalizeSubdomain(req.getSubdomain());
-        if (sub != null) {
-            // case-insensitive uniqueness
-            if (organizationRepository.existsBySubdomainIgnoreCase(sub)) {
-                throw new IllegalArgumentException("Subdomain already in use");
-            }
+        if (sub != null && organizationRepository.existsBySubdomainIgnoreCase(sub)) {
+            throw new IllegalArgumentException("Subdomain already in use");
         }
-        // Map DTO → entity
+
+        // 2) Map DTO → entity (scalars only)
         Organization org = mapper.toEntity(req);
         org.setSubdomain(sub); // ensure normalized value is persisted
 
-        // ✅ NEW: Organization has NO party FK; just save org
+        // 3) Attach Party if provided
+        if (req.getPartyId() != null) {
+            Party party = partyRepository.findById(req.getPartyId())
+                    .orElseThrow(() -> new NoSuchElementException("Party not found: " + req.getPartyId()));
+            org.setParty(party);
+        } else {
+            org.setParty(null);
+        }
+
+        // 4) Save organization
         Organization saved = organizationRepository.save(org);
         return mapper.toDTO(saved);
     }
@@ -97,6 +110,11 @@ public class OrganizationServiceImplementation implements OrganizationService {
                 }
             }
             org.setSubdomain(sub); // may be null to clear
+            org.setOrgName(req.getOrgName());
+            org.setActive(req.getActive());
+            org.setLogoUrl(req.getLogoUrl());
+            org.setPrimaryColor(req.getPrimaryColor());
+            org.setOrganizationType(req.getOrganizationType());
         }
         // apply scalar changes via mapper (safe fields only)
         mapper.apply(req, org);
@@ -105,15 +123,20 @@ public class OrganizationServiceImplementation implements OrganizationService {
         return mapper.toDTO(saved);
     }
 
-
     @Override
     @Transactional
     public void setActive(UUID orgId, boolean active) {
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new NoSuchElementException("Organization not found"));
-        org.setActive(active);
-    }
 
+        org.setActive(active);
+
+        // When deactivating an org, disable all memberships for that org
+        if (!active) {
+            orgMembershipRepository.disableAllForOrg(orgId);   // custom repo method
+            systemUserRepository.revokeAllForOrg(orgId);      // optional but nice
+        }
+    }
 
 
     private String normalizeSubdomain(String raw) {

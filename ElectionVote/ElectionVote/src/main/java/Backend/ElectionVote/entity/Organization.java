@@ -39,6 +39,18 @@ public class Organization {
     @Column(name = "org_type", nullable = false, length = 30)
     private OrganizationType organizationType;
 
+    /**
+     * If this tenant represents a specific national party (e.g. CDC as an org),
+     * link it here. NGOs / Media / NEC usually keep this null.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "party_id",
+            foreignKey = @ForeignKey(name = "organization_party_id_fkey")
+    )
+    private Party party;
+
+
     /** Branding & whitelabel */
     @Column(name = "logo_url")
     private String logoUrl;

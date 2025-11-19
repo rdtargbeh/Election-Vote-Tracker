@@ -26,10 +26,6 @@ public class PartyController {
     @Autowired
     private PartyService partyService;
 
-    @PostMapping
-    public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(partyService.create(req));
-    }
 
     @GetMapping("/{id}")
     public ResponseEntity<PartyDto> get(@PathVariable UUID id) {
@@ -59,5 +55,12 @@ public class PartyController {
     public void delete(@PathVariable UUID id) {
         partyService.delete(id);
     }
+
+
+    // Move to PlatformAdminController
+//    @PostMapping
+//    public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
+//        return ResponseEntity.status(HttpStatus.CREATED).body(partyService.create(req));
+//    }
 
 }

@@ -46,30 +46,17 @@ public class PartyServiceImplementation implements PartyService {
             throw new IllegalArgumentException("Abbreviation already exists");
         }
 
-        // 2) Resolve current tenant (org) from TenantContext
-        var ctx = Backend.ElectionVote.utility.TenantContext.get();
-        if (ctx == null || ctx.orgId().isEmpty()) {
-            // This endpoint should be tenant-scoped (/api/party/** with X-Org-Id or subdomain)
-            throw new IllegalStateException("Tenant context is missing; cannot create party without organization");
-        }
-
-        UUID orgId = ctx.orgId().get();
-        Organization org = organizationRepository.findById(orgId)
-                .orElseThrow(() -> new NoSuchElementException("Organization not found: " + orgId));
-
-        // 3) Map DTO → entity + attach organization
+        // 2) Global party: no TenantContext, no Organization reference
         Party entity = mapper.toEntity(req);
-        entity.setOrganization(org);
 
         try {
             Party saved = partyRepository.save(entity);
             return mapper.toDTO(saved);
         } catch (DataIntegrityViolationException e) {
-            // 4) Race protection for UNIQUE constraints
+            // Race protection for UNIQUE constraints
             throw new IllegalArgumentException("Party name or abbreviation already exists");
         }
     }
-
 
 
     @Override
@@ -120,5 +107,6 @@ public class PartyServiceImplementation implements PartyService {
                 .orElseThrow(() -> new NoSuchElementException("Party not found"));
         partyRepository.delete(p);
     }
+
 
 }
