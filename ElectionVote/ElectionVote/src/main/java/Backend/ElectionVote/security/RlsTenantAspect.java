@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * The Aspect must run inside the same transaction context as the JPA session.
  */
+
 @Aspect
 @Component
 @RequiredArgsConstructor
@@ -41,39 +42,30 @@ public class RlsTenantAspect {
     public void setRlsVariables(Transactional transactional) {
         TenantContext ctx = TenantContext.get();
         if (ctx == null) {
-            // No tenant context for this thread → likely a public or system operation.
+            // No tenant context → likely public/system operation; skip RLS vars
             return;
         }
 
         String isAdmin = Boolean.toString(ctx.isSystemAdmin());
         String org = ctx.orgId().map(Object::toString).orElse("");
 
-        // Use parameter binding to avoid SQL injection risk (even though values are local)
-        // SET LOCAL ensures the variables exist only within this transaction’s scope.
-        jdbc.update("SET LOCAL app.is_system_admin = ?", isAdmin);
-        jdbc.update("SET LOCAL app.current_org = ?", org);
+        // Use set_config so we can use parameters.
+        // set_config returns text (old value), so we use queryForObject and ignore the result.
+        jdbc.queryForObject(
+                "SELECT set_config('app.is_system_admin', ?, true)",
+                String.class,
+                isAdmin
+        );
+
+        jdbc.queryForObject(
+                "SELECT set_config('app.current_org', ?, true)",
+                String.class,
+                org
+        );
     }
+
+
+
 }
 
 
-//@Aspect
-//@Component
-//@RequiredArgsConstructor
-//public class RlsTenantAspect {
-//
-//    private final JdbcTemplate jdbc;
-//
-//    /** Runs before any @Transactional public method in your app packages. Adjust package pointcut if needed. */
-//    @Before("execution(public * Backend.ElectionVote..*(..)) && @annotation(transactional)")
-//    public void setRlsVariables(Transactional transactional) {
-//        TenantContext ctx = TenantContext.get();
-//        if (ctx == null) return;
-//
-//        String isAdmin = ctx.isSystemAdmin() ? "true" : "false";
-//        String org     = ctx.orgId().map(Object::toString).orElse("");
-//
-//        // SET LOCAL is scoped to the current transaction/connection
-//        jdbc.execute("SET LOCAL app.is_system_admin = '" + isAdmin + "'");
-//        jdbc.execute("SET LOCAL app.current_org     = '" + org + "'");
-//    }
-//}

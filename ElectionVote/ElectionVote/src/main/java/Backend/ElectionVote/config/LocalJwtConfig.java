@@ -44,6 +44,7 @@ public class LocalJwtConfig {
         return new RSAKey.Builder(pub).privateKey(priv).keyID("local-rsa-1").build();
     }
 
+
     @Bean
     JWKSource<SecurityContext> jwkSource(RSAKey rsaKey) {
         var jwkSet = new com.nimbusds.jose.jwk.JWKSet(rsaKey);

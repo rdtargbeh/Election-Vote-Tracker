@@ -3,6 +3,7 @@ package Backend.ElectionVote.config;
 
 import Backend.ElectionVote.security.RequestContextMdcFilter;
 import Backend.ElectionVote.security.TenantFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -87,13 +88,20 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/public/**",
-                                "/api/auth/**",      // login/register/etc
+                                "/api/auth/**",
                                 "/actuator/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(o -> o
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+                )
+                .exceptionHandling(eh -> eh
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"error\": \"UNAUTHORIZED\", \"message\": \"Authentication required\"}");
+                        })
                 )
                 .headers(h -> h
                         .contentSecurityPolicy(csp -> csp
@@ -104,14 +112,12 @@ public class SecurityConfig {
                                 .preload(true))
                 );
 
-        // Tenant filter after JWT has established Authentication
         http.addFilterAfter(tenantFilter, BearerTokenAuthenticationFilter.class);
-
-        // MDC logging after tenant is bound
         http.addFilterAfter(requestContextMdcFilter, TenantFilter.class);
 
         return http.build();
     }
+
 
     // ---------------------------------------------------------
     //  UI / console security (form login, stateful)

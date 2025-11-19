@@ -60,6 +60,7 @@ public class TenantFilter extends OncePerRequestFilter {
     private final ObjectProvider<OrganizationRepository> organizationsProvider;
     private static final Logger log = LoggerFactory.getLogger(TenantFilter.class);
 
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String p = request.getRequestURI();
@@ -67,7 +68,7 @@ public class TenantFilter extends OncePerRequestFilter {
         if ("OPTIONS".equalsIgnoreCase(m)) return true;
 
         return p.startsWith("/api/public/")
-                || p.startsWith("/api/auth/")     // <-- add this
+                || p.startsWith("/api/auth/")
                 || p.startsWith("/actuator")
                 || p.startsWith("/favicon")
                 || p.startsWith("/assets")
@@ -124,7 +125,7 @@ public class TenantFilter extends OncePerRequestFilter {
         if (a == null || !a.isAuthenticated()) return false;
 
         // Role check
-        if (a.getAuthorities().stream().anyMatch(au -> "ROLE_SYSTEM_ADMIN".equalsIgnoreCase(au.getAuthority())))
+        if (a.getAuthorities().stream().anyMatch(au -> "SYSTEM_ADMIN".equalsIgnoreCase(au.getAuthority())))
             return true;
 
         // Claim check (JWT)
@@ -146,6 +147,7 @@ public class TenantFilter extends OncePerRequestFilter {
         }
         return false;
     }
+
 
     private UUID parseUuidOrNull(String s) {
         if (s == null || s.isBlank()) return null;
@@ -182,57 +184,79 @@ public class TenantFilter extends OncePerRequestFilter {
         if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
             Object principal = auth.getPrincipal();
 
-            // 1) If principal is UserDetails (typical)
-            if (principal instanceof UserDetails ud) {
-                // try parse username as UUID (common pattern)
-                try {
-                    userId = UUID.fromString(ud.getUsername());
-                } catch (Exception ignored) {}
+            // --- JWT-based auth (resource server) ---
+            if (auth instanceof JwtAuthenticationToken jwtAuth) {
+                Jwt jwt = jwtAuth.getToken();
+                // userId from claims (userId, user_id, uid, or sub)
+                userId = extractUuidClaim(jwt, "userId", "user_id", "uid", "sub");
 
-                // try reflective getters on the principal (in case your custom impl exposes them)
-                userId = userId == null ? tryReflectiveGetUuid(principal, "getUserId", "getId", "userId") : userId;
-                isSystemAdmin = tryReflectiveIsAdmin(principal);
+                // 1) Prefer JWT "isSystemAdmin" claim
+                Object claimVal = jwt.getClaims().get("isSystemAdmin");
+                if (claimVal instanceof Boolean b) {
+                    isSystemAdmin = b;
+                } else if (claimVal instanceof String s) {
+                    isSystemAdmin = Boolean.parseBoolean(s);
+                }
 
-                // authorities fallback
+                // 2) Fallback to authorities (ROLE_SYSTEM_ADMIN, SYSTEM_ADMIN, etc.)
+                if (!isSystemAdmin) {
+                    isSystemAdmin = jwtAuth.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .anyMatch(TenantFilter::isSystemAdminAuthority);
+                }
+            }
+            // --- principal is raw Jwt ---
+            else if (principal instanceof Jwt jwt) {
+                userId = extractUuidClaim(jwt, "userId", "user_id", "uid", "sub");
+
+                Object claimVal = jwt.getClaims().get("isSystemAdmin");
+                if (claimVal instanceof Boolean b) {
+                    isSystemAdmin = b;
+                } else if (claimVal instanceof String s) {
+                    isSystemAdmin = Boolean.parseBoolean(s);
+                }
+
                 if (!isSystemAdmin) {
                     isSystemAdmin = auth.getAuthorities().stream()
                             .map(GrantedAuthority::getAuthority)
                             .anyMatch(TenantFilter::isSystemAdminAuthority);
                 }
             }
-            // 2) JwtAuthenticationToken (resource-server)
-            else if (principal instanceof JwtAuthenticationToken jwtAuth) {
-                Jwt jwt = jwtAuth.getToken();
-                userId = extractUuidClaim(jwt, "userId", "user_id", "uid", "sub");
-                isSystemAdmin = jwtAuth.getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .anyMatch(TenantFilter::isSystemAdminAuthority);
-            }
-            // 3) raw Jwt as principal
-            else if (principal instanceof Jwt jwt) {
-                userId = extractUuidClaim(jwt, "userId", "user_id", "uid", "sub");
+            // --- classic UserDetails-based auth ---
+            else if (principal instanceof UserDetails ud) {
+                try {
+                    userId = UUID.fromString(ud.getUsername());
+                } catch (Exception ignored) {}
+
+                if (userId == null) {
+                    userId = tryReflectiveGetUuid(principal, "getUserId", "getId", "userId");
+                }
+
                 isSystemAdmin = auth.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .anyMatch(TenantFilter::isSystemAdminAuthority);
             }
-            // 4) fallback: look at auth.name and authorities
+            // --- fallback: parse name + authorities ---
             else {
                 try {
                     userId = UUID.fromString(auth.getName());
                 } catch (Exception ignored) {}
+
                 isSystemAdmin = auth.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .anyMatch(TenantFilter::isSystemAdminAuthority);
             }
         }
 
-        // debug log
+        // 🔍 Debug – keep this
         if (log.isDebugEnabled()) {
             log.debug("TenantFilter: path={}, tenantScoped={}, orgId={}, userId={}, isSystemAdmin={}, authPresent={}",
                     path, tenantScoped, orgId, userId, isSystemAdmin, (auth != null));
             if (auth != null) {
                 auth.getAuthorities().forEach(a -> log.debug(" authority: {}", a.getAuthority()));
-                log.debug(" principal class: {}", auth.getPrincipal() == null ? "null" : auth.getPrincipal().getClass().getName());
+                log.debug(" principal class: {}", auth.getPrincipal() == null
+                        ? "null"
+                        : auth.getPrincipal().getClass().getName());
             }
         }
 
@@ -251,12 +275,15 @@ public class TenantFilter extends OncePerRequestFilter {
         }
     }
 
+
+
 // ---------- helpers ----------
 
     private static boolean isSystemAdminAuthority(String a) {
         if (a == null) return false;
         return a.equals("ROLE_SYSTEM_ADMIN") || a.equals("SYSTEM_ADMIN") || a.endsWith("SYSTEM_ADMIN");
     }
+
 
     private static UUID extractUuidClaim(Jwt jwt, String... names) {
         if (jwt == null) return null;

@@ -9,9 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -98,53 +100,67 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         }
     }
 
-    // 🔹 NEW: platform-level admin guard (no tenant required)
 // 🔹 NEW: platform-level admin guard (no tenant required)
-    @Override
-    public void requirePlatformAdmin() {
-        TenantContext ctx = TenantContext.get();
-        // Prefer userId from TenantContext (set by TenantFilter if available)
-        UUID userId = (ctx != null) ? ctx.userId().orElse(null) : null;
+@Override
+public void requirePlatformAdmin() {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        // If we don't have a userId from TenantContext, try SecurityContext
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (userId == null) {
-            if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-                throw new AccessDeniedException("Authentication required");
-            }
-            // Best-effort parse from auth.getName()
-            try {
-                userId = UUID.fromString(auth.getName());
-            } catch (Exception ignored) {
-                // not a UUID, leave null
-            }
+    // 1) Must be authenticated
+    if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+        throw new AuthenticationCredentialsNotFoundException("Authentication required");
+    }
+
+    boolean isAdmin = false;
+
+    Object principal = auth.getPrincipal();
+
+    // ---- Case 1: JwtAuthenticationToken (most common with resource server) ----
+    if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+        Jwt jwt = jwtAuth.getToken();
+
+        // (a) Prefer the JWT claim: isSystemAdmin
+        Object claimVal = jwt.getClaims().get("isSystemAdmin");
+        if (claimVal instanceof Boolean b) {
+            isAdmin = b;
+        } else if (claimVal instanceof String s) {
+            isAdmin = Boolean.parseBoolean(s);
         }
 
-        if (userId == null && (ctx == null || ctx.userId().isEmpty())) {
-            // no reliable user id found
-            throw new AccessDeniedException("Authentication required");
-        }
-
-        // Determine admin status: prefer TenantContext.isSystemAdmin() (set by TenantFilter)
-        boolean isAdmin = (ctx != null && ctx.isSystemAdmin());
-
-        // If TenantContext didn't indicate system admin, check SecurityContext authorities safely
+        // (b) Fallback: check authorities that end with SYSTEM_ADMIN (ROLE_SYSTEM_ADMIN, SYSTEM_ADMIN, etc.)
         if (!isAdmin) {
-            if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
-                isAdmin = auth.getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .anyMatch(a -> "ROLE_SYSTEM_ADMIN".equalsIgnoreCase(a)
-                                || "SYSTEM_ADMIN".equalsIgnoreCase(a)
-                                || (a != null && a.endsWith("SYSTEM_ADMIN")));
-            }
-        }
-
-        if (!isAdmin) {
-            throw new AccessDeniedException("Platform admin required");
+            isAdmin = jwtAuth.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
         }
     }
 
+    // ---- Case 2: principal itself is a Jwt ----
+    else if (principal instanceof Jwt jwt) {
+        Object claimVal = jwt.getClaims().get("isSystemAdmin");
+        if (claimVal instanceof Boolean b) {
+            isAdmin = b;
+        } else if (claimVal instanceof String s) {
+            isAdmin = Boolean.parseBoolean(s);
+        }
 
+        if (!isAdmin) {
+            isAdmin = auth.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
+        }
+    }
+
+    // ---- Case 3: Anything else (local dev, username/password, etc.) ----
+    else {
+        isAdmin = auth.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
+    }
+
+    if (!isAdmin) {
+        throw new AccessDeniedException("Platform admin required");
+    }
+}
 
 
     /* ---------------- helpers ---------------- */

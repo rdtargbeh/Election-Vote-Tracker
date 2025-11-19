@@ -107,17 +107,13 @@ public class ApiExceptionHandler {
         );
     }
 
-//    @org.springframework.web.bind.annotation.ExceptionHandler(AuthenticationException.class)
-//    public ResponseEntity<ApiError> handleAuth(AuthenticationException ex, HttpServletRequest req) {
-//        return respond(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage(), req, null, ex, false);
-//    }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest req) {
         return respond(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), req, null, ex, false);
     }
 
-    /* ---------- 500 fallback ---------- */
+/* ---------- 500 fallback ---------- */
     @org.springframework.web.bind.annotation.ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneric(Exception ex, HttpServletRequest req) {
         return respond(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
@@ -156,6 +152,15 @@ public class ApiExceptionHandler {
     private static String safe(String s) { return s == null ? "" : s; }
 
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleSpringAccessDenied(org.springframework.security.access.AccessDeniedException ex, HttpServletRequest req) {
+        return respond(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), req, null, ex, false);
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiError> handleSpringAuthentication(org.springframework.security.core.AuthenticationException ex, HttpServletRequest req) {
+        return respond(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage(), req, null, ex, false);
+    }
 
 }
 

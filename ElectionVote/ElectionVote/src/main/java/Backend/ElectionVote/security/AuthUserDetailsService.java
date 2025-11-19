@@ -22,6 +22,7 @@ public class AuthUserDetailsService implements UserDetailsService {
 
 
 
+
     @Override
     public UserDetails loadUserByUsername(String userNameOrEmail) throws UsernameNotFoundException {
         log.info("Auth lookup for [{}]", userNameOrEmail);
@@ -30,18 +31,28 @@ public class AuthUserDetailsService implements UserDetailsService {
                 .or(() -> users.findByUserNameIgnoreCase(userNameOrEmail))
                 .orElseThrow(() -> {
                     log.warn("No user found for [{}]", userNameOrEmail);
-                    return new UsernameNotFoundException("User not found" + userNameOrEmail);
+                    return new UsernameNotFoundException("User not found: " + userNameOrEmail);
                 });
 
         log.info("Found user {}, id={}", u.getEmail(), u.getUserId());
 
+        // Extract role name from UserRole → RoleName enum
+        String roleName = (u.getRole() != null && u.getRole().getRoleName() != null)
+                ? u.getRole().getRoleName().name()
+                : "USER";
+
+        String authority = "ROLE_" + roleName;
+
         return User.withUsername(userNameOrEmail)
                 .password(u.getPassword())
-                .authorities(u.isSystemAdmin() ? "ROLE_SYSTEM_ADMIN" : "ROLE_USER")
+                .authorities(authority)
                 .accountLocked(u.getLockedUntil() != null && u.getLockedUntil().isAfter(java.time.LocalDateTime.now()))
                 .disabled(!u.isActive())
                 .build();
     }
+
+
+
 
 }
 

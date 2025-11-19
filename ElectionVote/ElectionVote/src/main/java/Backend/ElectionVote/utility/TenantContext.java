@@ -8,12 +8,12 @@ public final class TenantContext {
 
     private final UUID userId;         // nullable
     private final UUID orgId;          // nullable
-    private final boolean systemAdmin;
+    private final boolean isSystemAdmin;
 
     private TenantContext(UUID userId, UUID orgId, boolean systemAdmin) {
         this.userId = userId;
         this.orgId = orgId;
-        this.systemAdmin = systemAdmin;
+        this.isSystemAdmin = systemAdmin;
     }
 
     public static void set(UUID userId, UUID orgId, boolean systemAdmin) {
@@ -25,7 +25,7 @@ public final class TenantContext {
 
     public Optional<UUID> userId() { return Optional.ofNullable(userId); }
     public Optional<UUID> orgId() { return Optional.ofNullable(orgId); }
-    public boolean isSystemAdmin() { return systemAdmin; }
+    public boolean isSystemAdmin() { return isSystemAdmin; }
 
 }
 
