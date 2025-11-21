@@ -7,10 +7,7 @@ import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.Party;
 import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.mapper.OrganizationMapper;
-import Backend.ElectionVote.repository.OrgMembershipRepository;
-import Backend.ElectionVote.repository.OrganizationRepository;
-import Backend.ElectionVote.repository.PartyRepository;
-import Backend.ElectionVote.repository.SystemUserRepository;
+import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import Backend.ElectionVote.utility.QueryUtils;
@@ -35,7 +32,7 @@ public class OrganizationServiceImplementation implements OrganizationService {
     @Autowired
     private  PartyRepository partyRepository;
     @Autowired
-    private SystemUserRepository systemUserRepository;
+    private UserSessionRepository userSessionRepository;
     @Autowired
     private OrgMembershipRepository orgMembershipRepository;
 
@@ -134,7 +131,7 @@ public class OrganizationServiceImplementation implements OrganizationService {
         // When deactivating an org, disable all memberships for that org
         if (!active) {
             orgMembershipRepository.disableAllForOrg(orgId);   // custom repo method
-            systemUserRepository.revokeAllForOrg(orgId);      // optional but nice
+            userSessionRepository.revokeAllForOrg(orgId);      // optional but nice
         }
     }
 

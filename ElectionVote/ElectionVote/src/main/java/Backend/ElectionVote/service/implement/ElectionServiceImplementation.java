@@ -47,17 +47,15 @@ public class ElectionServiceImplementation implements ElectionService {
      * </p>
      */
     @Override
+    @Transactional
     public ElectionDto create(ElectionCreateRequest req) {
-        /**
-         * Creates a new Election entry.
-         *
-         * @param req contains the election name, year, type, and active status.
-         * @return a DTO representing the saved election.
-         * @throws ResponseStatusException if an election with the same name and year already exists.
-         */
-        if (electionRepository.existsByElectionNameIgnoreCaseAndYear(req.getElectionName(), req.getYear())) {
-            throw new ResponseStatusException(CONFLICT,
-                    "Election '" + req.getElectionName() + "' (" + req.getYear() + ") already exists");
+        if (electionRepository.existsByElectionNameIgnoreCaseAndYear(
+                req.getElectionName(), req.getYear())) {
+
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "Election '" + req.getElectionName() + "' (" + req.getYear() + ") already exists"
+            );
         }
 
         Election saved = electionRepository.save(electionMapper.toEntity(req));
@@ -66,39 +64,39 @@ public class ElectionServiceImplementation implements ElectionService {
 
 
     @Override
+    @Transactional
     public ElectionDto update(UUID id, ElectionUpdateRequest req) {
-        /**
-         * Updates an existing Election.
-         *
-         * @param id  the unique identifier of the election to update.
-         * @param req the updated election details.
-         * @return a DTO of the updated election.
-         * @throws ResponseStatusException if the election is not found or if another election
-         *         with the same name and year already exists.
-         */
         Election entity = electionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
 
-        boolean dup = electionRepository.existsByElectionNameIgnoreCaseAndYear(req.getElectionName(), req.getYear())
+        boolean dup = electionRepository
+                .existsByElectionNameIgnoreCaseAndYear(req.getElectionName(), req.getYear())
                 && !(entity.getElectionName().equalsIgnoreCase(req.getElectionName())
                 && entity.getYear() == req.getYear());
+
         if (dup) {
-            throw new ResponseStatusException(CONFLICT,
-                    "Another election with name '" + req.getElectionName() + "' and year " + req.getYear() + " exists");
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "Another election with name '" + req.getElectionName()
+                            + "' and year " + req.getYear() + " exists"
+            );
         }
 
         electionMapper.apply(req, entity);
-        return electionMapper.toDTO(electionRepository.save(entity));
+        Election saved = electionRepository.save(entity);
+        return electionMapper.toDTO(saved);
     }
 
+
+    /**
+     * Deletes an election by its unique identifier.
+     *
+     * @param id the unique identifier of the election to delete.
+     * @throws ResponseStatusException if the election does not exist.
+     */
     @Override
+    @Transactional
     public void delete(UUID id) {
-        /**
-         * Deletes an election by its unique identifier.
-         *
-         * @param id the unique identifier of the election to delete.
-         * @throws ResponseStatusException if the election does not exist.
-         */
         if (!electionRepository.existsById(id)) {
             throw new ResponseStatusException(NOT_FOUND, "Election not found");
         }
@@ -106,37 +104,38 @@ public class ElectionServiceImplementation implements ElectionService {
     }
 
 
+    /**
+     * Retrieves a single election by its unique identifier.
+     *
+     * @param id the unique identifier of the election.
+     * @return a DTO representing the election.
+     * @throws ResponseStatusException if the election is not found.
+     */
     @Override
     public ElectionDto get(UUID id) {
-        /**
-         * Retrieves a single election by its unique identifier.
-         *
-         * @param id the unique identifier of the election.
-         * @return a DTO representing the election.
-         * @throws ResponseStatusException if the election is not found.
-         */
+
         return electionRepository.findById(id)
                 .map(electionMapper::toDTO)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
     }
 
-
+    /**
+     * Searches for elections based on filters such as name, year, type, and active status.
+     *
+     * @param req      the search filters encapsulated in an {@link ElectionSearchRequest}.
+     * @param pageable pagination and sorting details.
+     * @return a paginated list of elections that match the given criteria.
+     */
     @Override
     public Page<ElectionDto> search(ElectionSearchRequest req, Pageable pageable) {
-        /**
-         * Searches for elections based on filters such as name, year, type, and active status.
-         *
-         * @param req      the search filters encapsulated in an {@link ElectionSearchRequest}.
-         * @param pageable pagination and sorting details.
-         * @return a paginated list of elections that match the given criteria.
-         */
         Specification<Election> spec = Specification
                 .where(ElectionSpecs.nameContains(req.q()))
                 .and(ElectionSpecs.yearEquals(req.year()))
                 .and(ElectionSpecs.typeEquals(req.type()))
                 .and(ElectionSpecs.activeEquals(req.active()));
 
-        return electionRepository.findAll(spec, pageable).map(electionMapper::toDTO);
+        return electionRepository.findAll(spec, pageable)
+                .map(electionMapper::toDTO);
     }
 
 

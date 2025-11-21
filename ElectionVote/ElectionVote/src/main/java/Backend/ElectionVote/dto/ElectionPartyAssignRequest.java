@@ -1,0 +1,21 @@
+package Backend.ElectionVote.dto;
+
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+import java.util.UUID;
+
+@Data
+public class ElectionPartyAssignRequest {
+
+    @NotNull
+    private UUID electionId;
+
+    @NotNull
+    private UUID partyId;
+
+    private Integer ballotOrder;
+
+    // optional; default true
+    private Boolean isQualified;
+}

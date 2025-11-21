@@ -38,6 +38,9 @@ public class Candidate {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "is_independent", nullable = false)
+    private boolean independent = false;
+
 
     @Override
     public String toString() {

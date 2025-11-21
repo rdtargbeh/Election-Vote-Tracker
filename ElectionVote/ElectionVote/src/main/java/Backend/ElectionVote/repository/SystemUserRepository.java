@@ -68,9 +68,4 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
 
 
 
-    // User Session
-    @Modifying
-    @Query("UPDATE UserSession s SET s.revoked = true WHERE s.orgId = :orgId")
-    void revokeAllForOrg(@Param("orgId") UUID orgId);
-
 }

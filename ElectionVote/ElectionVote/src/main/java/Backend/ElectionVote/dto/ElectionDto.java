@@ -20,4 +20,5 @@ public class ElectionDto {
     private boolean isActive;
     private LocalDateTime dateCreated;
     private LocalDateTime dateUpdated;
+
 }

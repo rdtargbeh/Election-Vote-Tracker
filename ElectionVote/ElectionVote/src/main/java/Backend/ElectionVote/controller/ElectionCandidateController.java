@@ -16,8 +16,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ElectionCandidateController {
 
-    @Autowired
-    private ElectionCandidateService electionCandidateService;
+    private final ElectionCandidateService electionCandidateService;
+
 
     @PostMapping
     public ElectionCandidateDto create(@Valid @RequestBody ElectionCandidateCreateRequest req) {

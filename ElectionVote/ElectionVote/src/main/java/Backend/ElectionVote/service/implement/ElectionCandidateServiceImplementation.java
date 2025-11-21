@@ -8,10 +8,7 @@ import Backend.ElectionVote.entity.Election;
 import Backend.ElectionVote.entity.ElectionCandidate;
 import Backend.ElectionVote.entity.PollingCenter;
 import Backend.ElectionVote.mapper.ElectionCandidateMapper;
-import Backend.ElectionVote.repository.CandidateRepository;
-import Backend.ElectionVote.repository.ElectionCandidateRepository;
-import Backend.ElectionVote.repository.ElectionRepository;
-import Backend.ElectionVote.repository.PollingCenterRepository;
+import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.ElectionCandidateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,8 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
-import static org.springframework.http.HttpStatus.CONFLICT;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.*;
 
 @Service
 @RequiredArgsConstructor
@@ -32,27 +28,86 @@ public class ElectionCandidateServiceImplementation implements ElectionCandidate
     private final ElectionRepository electionRepo;
     private final CandidateRepository candidateRepository;
     private final PollingCenterRepository pollingCenterRepository;
-    private final ElectionCandidateMapper mapper = new ElectionCandidateMapper();
+    private final ElectionPartyRepository electionPartyRepository;
+
+    private final ElectionCandidateMapper mapper;
+
+
 
     @Override
     public ElectionCandidateDto create(ElectionCandidateCreateRequest req) {
-        if (electionCandidateRepository.existsByElection_ElectionIdAndCandidate_CandidateId(req.getElectionId(), req.getCandidateId())) {
-            throw new ResponseStatusException(CONFLICT,
-                    "Candidate already registered for this election");
+        // 1) Prevent duplicate candidate in the same election
+        if (electionCandidateRepository
+                .existsByElection_ElectionIdAndCandidate_CandidateId(req.getElectionId(), req.getCandidateId())) {
+
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "Candidate is already registered for this election"
+            );
         }
 
+        // 2) Load election and candidate
         Election election = electionRepo.findById(req.getElectionId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND,
+                        "Election not found"
+                ));
+
         Candidate candidate = candidateRepository.findById(req.getCandidateId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Candidate not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND,
+                        "Candidate not found"
+                ));
+
+        // 3) Optional polling center (null = nationwide/district-scoped)
         PollingCenter center = (req.getCenterId() != null)
                 ? pollingCenterRepository.findById(req.getCenterId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"))
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND,
+                        "Polling center not found"
+                ))
                 : null;
 
-        ElectionCandidate saved = electionCandidateRepository.save(mapper.toEntity(req, election, candidate, center));
-        return mapper.toDTO(saved);
+        // 4) Enforce party vs. independent rules at service level
+        if (candidate.isIndependent()) {
+            // Independent candidate must NOT have a party_id
+            if (candidate.getParty() != null) {
+                throw new ResponseStatusException(
+                        BAD_REQUEST,
+                        "Independent candidate must not have a party assigned"
+                );
+            }
+            // No election_party check needed for independents
+        } else {
+            // Party-based candidate must have a party
+            if (candidate.getParty() == null || candidate.getParty().getPartyId() == null) {
+                throw new ResponseStatusException(
+                        BAD_REQUEST,
+                        "Candidate must have a party assigned before being registered to an election"
+                );
+            }
+
+            UUID partyId = candidate.getParty().getPartyId();
+
+            // Ensure that party is registered for this election (election_party table)
+            boolean partyRegistered = electionPartyRepository
+                    .existsByElection_ElectionIdAndParty_PartyId(election.getElectionId(), partyId);
+
+            if (!partyRegistered) {
+                throw new ResponseStatusException(
+                        CONFLICT,
+                        "Party " + candidate.getParty().getAbbreviation()
+                                + " is not registered for election '" + election.getElectionName() + "'"
+                );
+            }
+        }
+        // 5) Persist election-candidate
+        ElectionCandidate saved =
+                electionCandidateRepository.save(mapper.toEntity(req, election, candidate, center));
+
+        return mapper.toDTO(saved);   // use toDTO or toDto based on your mapper signature
     }
+
 
     @Override
     public ElectionCandidateDto update(UUID id, ElectionCandidateUpdateRequest req) {

@@ -19,5 +19,8 @@ public class CandidateCreateRequest {
     private UUID partyId;
 
     private String photoUrl;
+
     private boolean isActive = true;
+
+    private Boolean independent;
 }

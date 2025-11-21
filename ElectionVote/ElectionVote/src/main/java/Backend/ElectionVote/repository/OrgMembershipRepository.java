@@ -51,6 +51,13 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
 
     // Disable Org Member
     @Modifying
-    @Query("UPDATE OrgMembership m SET m.enabled = false WHERE m.organization.orgId = :orgId")
+    @Query("""
+       UPDATE OrgMembership m
+       SET m.isEnabled = false
+       WHERE m.organization.orgId = :orgId
+       """)
     void disableAllForOrg(@Param("orgId") UUID orgId);
+
+
+
 }

@@ -27,5 +27,18 @@ public interface UserSessionRepository extends JpaRepository<UserSession, UUID> 
     @Modifying
     @Query("UPDATE UserSession s SET s.revoked = true WHERE s.sessionId = :sessionId")
     void revokeById(@Param("sessionId") UUID sessionId);
+
+
+    // User Session
+    @Modifying
+    @Query("""
+       UPDATE UserSession s
+       SET s.revoked = true
+       WHERE s.organization.orgId = :orgId
+       """)
+    void revokeAllForOrg(@Param("orgId") UUID orgId);
+
+
+
 }
 
