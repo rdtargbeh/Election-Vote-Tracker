@@ -1,32 +1,27 @@
 
 // src/App.tsx
 // ------------------------------------------------------
-// Application route container for the Election Vote Tracker.
+// Main application routes for the Election Vote Tracker.
 //
-// For now, we only define the root ("/") route that shows
-// the base shell we already built.
-//
-// Later we will add routes like:
-// - /login
-// - /select-org
-// - /org/:orgId/dashboard
-// - /org/:orgId/elections
-// etc.
-//
-// React Router's <BrowserRouter> is defined in main.tsx;
-// here we only use <Routes> and <Route>.
+// Routing behavior:
+// - "/"             = LandingPage (public)
+// - "/login"        = LoginPage (public)
+// - "/select-org"   = Requires login (auth only)
+// - "/dashboard"    = Requires login + org context
+// - "/health-test"  = Public (optional)
 // ------------------------------------------------------
 
 import React from "react";
 import { Routes, Route } from "react-router-dom";
+
 import LoginPage from "./pages/loginPage";
 import SelectOrgPage from "./pages/SelectOrgPage";
 import DashboardPage from "./pages/DashboardPage";
 import HealthCheckPage from "./pages/HealthCheckPage";
 
+import { RequireAuth, RequireOrg } from "./shared/routes/RequireGuards";
 
-
-// Temporary landing page component
+// Temporary landing page
 const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center">
@@ -58,14 +53,35 @@ const LandingPage: React.FC = () => {
 const App: React.FC = () => {
   return (
     <Routes>
-      {/* Root route – initial landing */}
+      {/* Public */}
       <Route path="/" element={<LandingPage />} />
-      {/* Future routes will be added here */}
-     <Route path="/login" element={<LoginPage />} />
-     <Route path="/select-org" element={<SelectOrgPage />} />
-     <Route path="/dashboard" element={<DashboardPage />} />
-     <Route path="/health-test" element={<HealthCheckPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/health-test" element={<HealthCheckPage />} />
 
+      {/* Auth-only route (no org needed) */}
+      <Route
+        path="/select-org"
+        element={
+          <RequireAuth>
+            <SelectOrgPage />
+          </RequireAuth>
+        }
+      />
+
+      {/* Full protection: must be logged in AND have org */}
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <RequireOrg>
+              <DashboardPage />
+            </RequireOrg>
+          </RequireAuth>
+        }
+      />
+
+      {/* Fallback */}
+      <Route path="*" element={<LandingPage />} />
     </Routes>
   );
 };

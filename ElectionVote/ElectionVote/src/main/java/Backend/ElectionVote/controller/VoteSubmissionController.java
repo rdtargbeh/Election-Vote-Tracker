@@ -95,14 +95,4 @@ public class VoteSubmissionController {
     }
 
 
-    //    @PostMapping
-//    public VoteSubmissionDto create(@Valid @RequestBody VoteSubmissionCreateRequest req) {
-//        return voteSubmissionService.create(req);
-//    }
-//
-//    @PutMapping("/{id}")
-//    public VoteSubmissionDto update(@PathVariable UUID id,
-//                                    @RequestBody VoteSubmissionUpdateRequest req) {
-//        return voteSubmissionService.update(id, req);
-//    }
 }

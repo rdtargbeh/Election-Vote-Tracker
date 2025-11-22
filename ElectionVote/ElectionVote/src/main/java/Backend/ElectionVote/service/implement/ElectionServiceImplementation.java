@@ -7,8 +7,11 @@ import Backend.ElectionVote.dto.ElectionUpdateRequest;
 import Backend.ElectionVote.entity.Election;
 import Backend.ElectionVote.mapper.ElectionMapper;
 import Backend.ElectionVote.repository.ElectionRepository;
+import Backend.ElectionVote.repository.StatsRepository;
 import Backend.ElectionVote.service.ElectionService;
+import Backend.ElectionVote.service.ElectionStatsProjection;
 import Backend.ElectionVote.utility.ElectionSpecs;
+import Backend.ElectionVote.utility.ElectionStatsDto;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.CONFLICT;
@@ -32,6 +36,7 @@ public class ElectionServiceImplementation implements ElectionService {
     EntityManager em;
 
     private final ElectionRepository electionRepository;
+    private final StatsRepository statsRepository;
     private final ElectionMapper electionMapper;
 
     /**
@@ -119,6 +124,22 @@ public class ElectionServiceImplementation implements ElectionService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
     }
 
+
+    @Override
+    public List<ElectionDto> listActiveElections() {
+        List<Election> elections = electionRepository.findByIsActiveTrueOrderByDateCreatedDesc();
+        return elections.stream()
+                .map(electionMapper::toDTO)
+                .toList();
+    }
+
+    @Override
+    public List<ElectionDto> listAllElections() {
+        return electionRepository.findAll().stream()
+                .map(electionMapper::toDTO)
+                .toList();
+    }
+
     /**
      * Searches for elections based on filters such as name, year, type, and active status.
      *
@@ -139,4 +160,23 @@ public class ElectionServiceImplementation implements ElectionService {
     }
 
 
+
+    @Override
+    public ElectionStatsDto getOrgElectionStats(UUID orgId, UUID electionId) {
+        ElectionStatsProjection p = statsRepository
+                .findOrgElectionStats(orgId, electionId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND, "No stats found for org/election combination"));
+
+        return ElectionStatsDto.builder()
+                .orgId(p.getOrgId())
+                .electionId(p.getElectionId())
+                .registeredVoters(p.getRegisteredVoters())
+                .ballotsCast(p.getBallotsCast())
+                .validVotes(p.getValidVotes())
+                .invalidTotal(p.getInvalidTotal())
+                .turnoutPct(p.getTurnoutPct())
+                .invalidPct(p.getInvalidPct())
+                .build();
+    }
 }

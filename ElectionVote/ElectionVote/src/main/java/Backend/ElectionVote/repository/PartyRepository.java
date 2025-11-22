@@ -23,13 +23,18 @@ public interface PartyRepository extends JpaRepository<Party, UUID> {
 
     Optional<Party> findByAbbreviationIgnoreCase(String abbreviation);
 
+
     @Query("""
-           select p from Party p
-           where (:q is null or
-                  lower(p.partyName) like lower(concat('%', :q, '%')) or
-                  lower(p.abbreviation) like lower(concat('%', :q, '%')))
-           """)
-    Page<Party> search(@Param("q") String q, Pageable pageable);
+       select p from Party p
+       where (:pattern is null or
+              lower(p.partyName)    like :pattern or
+              lower(p.abbreviation) like :pattern)
+       order by p.partyName
+       """)
+    Page<Party> search(@Param("pattern") String pattern, Pageable pageable);
+
+
+
 
 
 }

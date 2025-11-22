@@ -8,6 +8,7 @@ import Backend.ElectionVote.enums.ElectionType;
 import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.ElectionService;
 import Backend.ElectionVote.service.VoteSubmissionService;
+import Backend.ElectionVote.utility.ElectionStatsDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -25,10 +27,11 @@ import java.util.UUID;
 public class ElectionController {
 
     @Autowired
-    private ElectionService service;
+    private ElectionService electionService;
     @Autowired
     private VoteSubmissionService voteSubmissionService;
     private final AuthorizationService authz;
+
 
     /**
      * Create a new election.
@@ -37,7 +40,7 @@ public class ElectionController {
     @PostMapping
     public ElectionDto create(@Valid @RequestBody ElectionCreateRequest req) {
         authz.requirePlatformAdmin();   // <-- protect creation
-        return service.create(req);
+        return electionService.create(req);
     }
 
     /**
@@ -48,7 +51,7 @@ public class ElectionController {
     public ElectionDto update(@PathVariable UUID id,
                               @Valid @RequestBody ElectionUpdateRequest req) {
         authz.requirePlatformAdmin();   // <-- protect update
-        return service.update(id, req);
+        return electionService.update(id, req);
     }
 
     /**
@@ -58,7 +61,7 @@ public class ElectionController {
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
         authz.requirePlatformAdmin();   // <-- protect delete
-        service.delete(id);
+        electionService.delete(id);
     }
 
     /**
@@ -67,14 +70,42 @@ public class ElectionController {
      */
     @GetMapping("/{id}")
     public ElectionDto get(@PathVariable UUID id) {
-        return service.get(id);
+        return electionService.get(id);
     }
+
+    /**
+     * List elections.
+     * If ?activeOnly=true, only active elections are returned.
+     */
+    @GetMapping
+    public List<ElectionDto> listElections(
+            @RequestParam(name = "activeOnly", required = false, defaultValue = "false")
+            boolean activeOnly
+    ) {
+        if (activeOnly) {
+            return electionService.listActiveElections();
+        }
+        return electionService.listAllElections();
+    }
+
+    /**
+     * Example:
+     * GET /api/stats/org-election?orgId={uuid}&electionId={uuid}
+     */
+    @GetMapping("/org-election/stats")
+    public ElectionStatsDto getOrgElectionStats(
+            @RequestParam UUID orgId,
+            @RequestParam UUID electionId
+    ) {
+        return electionService.getOrgElectionStats(orgId, electionId);
+    }
+
 
     /**
      * Search elections with optional filters (q, year, type, active).
      * Read-only; open to authenticated callers.
      */
-    @GetMapping
+    @GetMapping("/search")
     public Page<ElectionDto> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Integer year,
@@ -83,7 +114,7 @@ public class ElectionController {
             @PageableDefault(size = 20, sort = "year", direction = Sort.Direction.DESC)
             Pageable pageable) {
 
-        return service.search(ElectionSearchRequest.of(q, year, type, active), pageable);
+        return electionService.search(ElectionSearchRequest.of(q, year, type, active), pageable);
     }
 
 

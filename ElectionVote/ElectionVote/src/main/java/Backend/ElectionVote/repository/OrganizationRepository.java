@@ -24,21 +24,27 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
     boolean existsByOrgIdAndIsActiveTrue(UUID orgId);
 
 
+//    Optional<UUID> findIdBySubdomainIgnoreCaseAndIsActiveTrue(String subdomain);
+
     @Query("select o.orgId from Organization o where lower(o.subdomain) = lower(?1) and o.isActive = true")
     Optional<UUID> findIdBySubdomainIgnoreCaseAndIsActiveTrue(String subdomain);
 
 
     @Query("""
-           select o from Organization o
-           where (:q is null or lower(o.orgName) like lower(concat('%', :q, '%'))
-                          or lower(o.subdomain) like lower(concat('%', :q, '%')))
-             and (:active is null or o.isActive = :active)
-             and (:type is null or o.organizationType = :type)
-           """)
-    Page<Organization> search(@Param("q") String q,
+       select o
+       from Organization o
+       where (:pattern is null or
+              lower(o.orgName)   like :pattern
+              or lower(o.subdomain) like :pattern)
+         and (:active is null or o.isActive = :active)
+         and (:type is null or o.organizationType = :type)
+       """)
+    Page<Organization> search(@Param("pattern") String pattern,
                               @Param("active") Boolean active,
                               @Param("type") OrganizationType type,
                               Pageable pageable);
+
+
 
 
 

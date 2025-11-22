@@ -50,7 +50,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private final TallySheetRepository tallySheetRepository;
     private final AuditLogService auditLogService;
 
-    private final VoteSubmissionMapper mapper = new VoteSubmissionMapper();
+    private final VoteSubmissionMapper mapper;
 
 
     @Override

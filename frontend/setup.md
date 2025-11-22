@@ -11,8 +11,10 @@ npm install
 # Install Tailwind in the project
 npm install -D tailwindcss postcss autoprefixer
 
-# Initialize Tailwind config files
-npx tailwindcss init -p
+# 
+npm install react-router-dom @tanstack/react-query @tanstack/react-query-devtools axios zustand @stomp/stompjs sockjs-client lucide-react recharts react-leaflet leaflet
 
+# 
+npm install react-router-dom @tanstack/react-query @tanstack/react-query-devtools axios zustand @stomp/stompjs sockjs-client lucide-react recharts react-leaflet leaflet
 
-# ###########################################################
+# ##########################################################

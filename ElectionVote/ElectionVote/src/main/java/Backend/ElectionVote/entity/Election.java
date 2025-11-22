@@ -60,4 +60,10 @@ public class Election {
     public void onUpdate() {
         dateUpdated = LocalDateTime.now();
     }
+
+    // Optional: nice label for dropdowns
+    @Transient
+    public String getDisplayLabel() {
+        return electionName + " (" + year + ")";
+    }
 }

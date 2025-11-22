@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,6 +15,7 @@ public interface ElectionRepository extends JpaRepository<Election, UUID>, JpaSp
 
     boolean existsByElectionNameIgnoreCaseAndYear(String electionName, int year);
 
+    List<Election> findByIsActiveTrueOrderByDateCreatedDesc();
 
     Optional<Election> findFirstByIsActiveTrueAndElectionType(ElectionType type);
 }

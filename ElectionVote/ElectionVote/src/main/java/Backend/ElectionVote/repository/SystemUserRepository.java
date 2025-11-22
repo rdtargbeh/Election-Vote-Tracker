@@ -47,22 +47,21 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
      *   <li>Pagination is handled by Spring Data via the returned {@code Page<SystemUser>}.</li>
      * </ul>
      */
-
     @Query("""
        select u
        from OrgMembership m
        join m.user u
        where m.organization.orgId = :org
          and m.isEnabled = true
-         and (:q is null or
-              lower(u.firstName) like lower(concat('%', :q, '%')) or
-              lower(u.lastName)  like lower(concat('%', :q, '%')) or
-              lower(u.email)     like lower(concat('%', :q, '%')) or
-              lower(u.userName)  like lower(concat('%', :q, '%')))
+         and (:pattern is null or
+              lower(u.firstName) like :pattern or
+              lower(u.lastName)  like :pattern or
+              lower(u.email)     like :pattern or
+              lower(u.userName)  like :pattern)
          and (:active is null or u.isActive = :active)
        """)
     Page<SystemUser> findAllInOrg(@Param("org") UUID orgId,
-                                  @Param("q") String q,
+                                  @Param("pattern") String pattern,
                                   @Param("active") Boolean active,
                                   Pageable pageable);
 

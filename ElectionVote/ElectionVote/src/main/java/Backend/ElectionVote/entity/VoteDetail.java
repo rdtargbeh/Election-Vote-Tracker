@@ -15,8 +15,15 @@ import java.util.UUID;
 @Builder
 
 @Entity
-@Table(name = "vote_detail")
-
+@Table(
+        name = "vote_detail",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uq_submission_candidate",
+                        columnNames = {"submission_id", "candidate_id"}
+                )
+        }
+)
 public class VoteDetail {
 
     @Id

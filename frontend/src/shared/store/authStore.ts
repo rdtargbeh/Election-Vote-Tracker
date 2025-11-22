@@ -41,6 +41,7 @@ type AuthState = {
   currentOrgId: string | null;
   // Actions
   setAuth: (payload: { user: AuthUser; token: string }) => void;
+  setToken: (token: string | null) => void;
   clearAuth: () => void;
   setCurrentOrg: (orgId: string | null) => void;
 };
@@ -50,13 +51,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   token: null,
   currentOrgId: null,
 
+  // For future flows where backend returns both user + token
   setAuth: ({ user, token }) =>
     set({
       user,
       token,
-      // Optionally auto-select the default org in a later step
-      // currentOrgId: user.orgMemberships[0]?.orgId ?? null,
     }),
+
+  // For simple flows where we only have a token (current case)
+  setToken: (token) =>
+    set((state) => ({
+      ...state,
+      token,
+    })),
 
   clearAuth: () =>
     set({

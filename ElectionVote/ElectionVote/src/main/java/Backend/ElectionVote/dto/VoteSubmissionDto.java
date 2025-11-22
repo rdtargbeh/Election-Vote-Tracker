@@ -1,10 +1,12 @@
 package Backend.ElectionVote.dto;
 
 import Backend.ElectionVote.enums.VoteStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 
@@ -12,18 +14,54 @@ import java.util.UUID;
 @Builder
 public class VoteSubmissionDto {
     private UUID submissionId;
-    private UUID orgId;      private String orgName;
-    private UUID electionId; private String electionName; private int year;
-    private UUID centerId;   private String centerCode;   private String centerName;
-    private UUID agentId;    private String agentName;
+
+    private UUID orgId;
+    private String orgName;
+
+    private UUID electionId;
+    private String electionName;
+    private int year;
+
+    private UUID centerId;
+    private String centerCode;
+    private String centerName;
+
+    private UUID agentId;
+    private String agentName;
+
     private LocalDateTime submissionTime;
+
+    @JsonIgnore
     private String candidateVotesJson; // JSON string (candidateId -> votes)
-    private Integer ballotsCast, invalidBallots, blankBallots, rejectedBallots, spoiledBallots;
+    private Map<UUID, Integer> candidateVotes;
+
+    private Integer ballotsCast;
+    private Integer invalidBallots;
+    private Integer blankBallots;
+    private Integer rejectedBallots;
+    private Integer spoiledBallots;
+
     private VoteStatus status;
     private String comments;
-    private Double latitude, longitude;
-    private UUID verifiedBy; private String verifiedByName;
+
+    private Double latitude;
+    private Double longitude;
+
+    private UUID verifiedBy;
+    private String verifiedByName;
     private LocalDateTime dateVerified;
-    private String clientIp, userAgent, submissionHash;
+
+    private String clientIp;
+    private String userAgent;
+    private String submissionHash;
+
     private Integer version;
+
+    // NEW: derived helpers for UI (can be set by service or mapper)
+    private Integer validVotes;    // sum of candidateVotes
+    private Integer invalidTotal;  // invalid + blank + rejected + spoiled
+
+    private Double turnoutPct;     // ballotsCast / registeredVoters * 100
+    private Double invalidPct;     // invalidTotal / ballotsCast * 100
+
 }
