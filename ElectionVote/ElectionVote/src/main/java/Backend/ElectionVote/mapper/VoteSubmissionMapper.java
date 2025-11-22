@@ -34,6 +34,7 @@ public class VoteSubmissionMapper {
     public VoteSubmissionDto toDTO(VoteSubmission s) {
         Organization org = s.getOrganization();
         Election e = s.getElection();
+        PollingPlace p = s.getPollingPlace();
         PollingCenter c = s.getPollingCenter();
         SystemUser a = s.getAgent();
         SystemUser v = s.getVerifiedBy();
@@ -61,10 +62,10 @@ public class VoteSubmissionMapper {
         Double turnoutPct = null;
         Double invalidPct = null;
 
-        if (s.getBallotsCast() != null && s.getBallotsCast() > 0) {
-            turnoutPct = (s.getBallotsCast() / (double)(c.getRegisteredVoters())) * 100.0;
-            invalidPct = (invalidTotal / (double) s.getBallotsCast()) * 100.0;
-        }
+//        if (s.getBallotsCast() != null && s.getBallotsCast() > 0) {
+//            turnoutPct = (s.getBallotsCast() / (double)(c.getRegisteredVoters())) * 100.0;
+//            invalidPct = (invalidTotal / (double) s.getBallotsCast()) * 100.0;
+//        }
 
         return VoteSubmissionDto.builder()
                 .submissionId(s.getSubmissionId())
@@ -76,9 +77,16 @@ public class VoteSubmissionMapper {
                 .electionName(e.getElectionName())
                 .year(e.getYear())
 
+                // Polling center reference
                 .centerId(c.getCenterId())
                 .centerCode(c.getCode())
                 .centerName(c.getCenterName())
+
+                // Polling place reference
+                .placeId(p.getPlaceId())
+                .placeCode(p.getCode())
+                .placeNumber(p.getPlaceNumber())
+                .placeLabel(p.getLabel())
 
                 .agentId(a.getUserId())
                 .agentName(agentName)

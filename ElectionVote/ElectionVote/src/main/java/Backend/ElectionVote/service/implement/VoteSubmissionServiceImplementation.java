@@ -40,12 +40,16 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private final VoteSubmissionRepository voteSubmissionRepository;
     private final OrganizationRepository orgRepo;
     private final ElectionRepository electionRepo;
-    private final PollingCenterRepository centerRepo;
     private final SystemUserRepository userRepo;
     private final VoteDetailRepository voteDetailRepository;
     private final VoteDetailService voteDetailService;
     private final NotificationService notificationService;
+
+    private final PollingCenterRepository centerRepo;
+    private final PollingPlaceRepository placeRepo;
+    private final PollingPlaceAllocationRepository placeAllocationRepo;
     private final PollingCenterAllocationRepository allocationRepo;
+
     private final FileUploadService fileUploadService;
     private final TallySheetRepository tallySheetRepository;
     private final AuditLogService auditLogService;
@@ -61,27 +65,66 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     @Override
     @Transactional
     public VoteSubmissionDto create(VoteSubmissionCreateRequest req, List<MultipartFile> files) {
+        // --------- Lookups ---------
         Organization org = orgRepo.findById(req.getOrgId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Organization not found"));
+
         Election e = electionRepo.findById(req.getElectionId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
+
         PollingCenter c = centerRepo.findById(req.getCenterId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
+
         SystemUser agent = userRepo.findById(req.getAgentId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Agent not found"));
 
-        var alloc = allocationRepo.findByElection_ElectionIdAndPollingCenter_CenterId(
-                e.getElectionId(), c.getCenterId()
-        ).orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Center not allocated for this election"));
+        PollingPlace p = placeRepo.findById(req.getPlaceId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling place not found"));
 
-        validateTally(req.getCandidateVotes(),
-                nz(req.getInvalidBallots()), nz(req.getBlankBallots()), nz(req.getRejectedBallots()), nz(req.getSpoiledBallots()),
-                nz(req.getBallotsCast()), alloc.getRegisteredVoters(), alloc.getBallotsIssued());
+        // Ensure the place belongs to the specified center
+        if (!p.getPollingCenter().getCenterId().equals(c.getCenterId())) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Polling place does not belong to the specified polling center"
+            );
+        }
 
+        // --------- Allocation (per election + place) ---------
+        var alloc = placeAllocationRepo
+                .findByElection_ElectionIdAndPollingPlace_PlaceId(e.getElectionId(), p.getPlaceId())
+                .orElseThrow(() ->
+                        new ResponseStatusException(BAD_REQUEST, "Polling place not allocated for this election"));
+
+        // --------- Validate tally against allocation ---------
+        validateTally(
+                req.getCandidateVotes(),
+                nz(req.getInvalidBallots()),
+                nz(req.getBlankBallots()),
+                nz(req.getRejectedBallots()),
+                nz(req.getSpoiledBallots()),
+                nz(req.getBallotsCast()),
+                alloc.getRegisteredVoters(),
+                alloc.getBallotsIssued()
+        );
+
+        // --------- Build entity ---------
         VoteSubmission s = mapper.toEntity(req, org, e, c, agent);
-        s.setSubmissionHash(buildSubmissionHash(org.getOrgId(), e.getElectionId(), c.getCenterId(), agent.getUserId(),
-                s.getCandidateVotes(), s.getBallotsCast(), s.getInvalidBallots(), s.getBlankBallots(),
-                s.getRejectedBallots(), s.getSpoiledBallots()));
+        s.setPollingPlace(p);
+
+        // include place in the hash so same content at a different place is NOT a duplicate
+        s.setSubmissionHash(buildSubmissionHash(
+                org.getOrgId(),
+                e.getElectionId(),
+                c.getCenterId(),
+                p.getPlaceId(),
+                agent.getUserId(),
+                s.getCandidateVotes(),
+                s.getBallotsCast(),
+                s.getInvalidBallots(),
+                s.getBlankBallots(),
+                s.getRejectedBallots(),
+                s.getSpoiledBallots()
+        ));
 
         if (voteSubmissionRepository.existsBySubmissionHash(s.getSubmissionHash())) {
             throw new ResponseStatusException(CONFLICT, "Duplicate submission (same content).");
@@ -90,29 +133,32 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         s.setVersion(1);
         VoteSubmission saved = voteSubmissionRepository.save(s);
 
-        // ✅ attach files (store in file_upload, create TallySheet for images)
+        // --------- Attach files (tally sheets) ---------
         if (files != null && !files.isEmpty()) {
             attachFilesToSubmission(org, saved, agent, files);
         }
-
-        // Audit Log Activity
+        // --------- Audit log ---------
         auditLogService.logCreate(
                 org.getOrgId(),
                 agent.getUserId(),
                 "VoteSubmission",
-                "Created submission: " + saved.getSubmissionId() + " at " + c.getCenterName()
+                "Created submission: " + saved.getSubmissionId() +
+                        " at " + c.getCenterName() +
+                        " / place: " + p.getCode()
         );
+        // --------- Notify agent ---------
+        String placeDisplay = (p.getLabel() != null && !p.getLabel().isBlank())
+                ? p.getLabel()
+                : "Place " + p.getPlaceNumber();
 
-        // ✅ notify agent (submission received)
         notify(
                 org.getOrgId(), agent.getUserId(),
                 NotificationType.VOTE,
                 "Submission Received",
-                "Your vote submission for " + c.getCenterName() + " was received.",
+                "Your vote submission for " + c.getCenterName() + " - " + placeDisplay + " was received.",
                 "vote_submission", saved.getSubmissionId(),
                 NotificationPriority.NORMAL, DeliveryMethod.IN_APP
         );
-
         return mapper.toDTO(saved);
     }
 
@@ -130,29 +176,65 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     public VoteSubmissionDto update(UUID id, VoteSubmissionUpdateRequest req, List<MultipartFile> files) {
         VoteSubmission s = voteSubmissionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
+
         if (s.getStatus() != VoteStatus.PENDING) {
             throw new ResponseStatusException(BAD_REQUEST, "Only PENDING submissions can be updated");
         }
 
-        Map<UUID,Integer> mergedVotes = req.getCandidateVotes() != null ? req.getCandidateVotes() : readVotes(s.getCandidateVotes());
-        int cast    = req.getBallotsCast()    != null ? req.getBallotsCast()    : s.getBallotsCast();
-        int invalid = req.getInvalidBallots() != null ? req.getInvalidBallots() : s.getInvalidBallots();
-        int blank   = req.getBlankBallots()   != null ? req.getBlankBallots()   : s.getBlankBallots();
-        int rej     = req.getRejectedBallots()!= null ? req.getRejectedBallots(): s.getRejectedBallots();
-        int spo     = req.getSpoiledBallots() != null ? req.getSpoiledBallots() : s.getSpoiledBallots();
+        // ---- Merge current + incoming values ----
+        Map<UUID, Integer> mergedVotes =
+                (req.getCandidateVotes() != null)
+                        ? req.getCandidateVotes()
+                        : readVotes(s.getCandidateVotes());
 
-        var alloc = allocationRepo.findByElection_ElectionIdAndPollingCenter_CenterId(
-                s.getElection().getElectionId(), s.getPollingCenter().getCenterId()
-        ).orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Center not allocated for this election"));
+        int cast    = (req.getBallotsCast()    != null) ? req.getBallotsCast()    : s.getBallotsCast();
+        int invalid = (req.getInvalidBallots() != null) ? req.getInvalidBallots() : s.getInvalidBallots();
+        int blank   = (req.getBlankBallots()   != null) ? req.getBlankBallots()   : s.getBlankBallots();
+        int rej     = (req.getRejectedBallots()!= null) ? req.getRejectedBallots(): s.getRejectedBallots();
+        int spo     = (req.getSpoiledBallots() != null) ? req.getSpoiledBallots() : s.getSpoiledBallots();
 
-        validateTally(mergedVotes, invalid, blank, rej, spo, cast, alloc.getRegisteredVoters(), alloc.getBallotsIssued());
+        // ---- Allocation is now per PLACE (not center) ----
+        PollingPlace place = s.getPollingPlace();
+        if (place == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Submission is missing polling place reference");
+        }
 
+        var alloc = placeAllocationRepo
+                .findByElection_ElectionIdAndPollingPlace_PlaceId(
+                        s.getElection().getElectionId(),
+                        place.getPlaceId()
+                )
+                .orElseThrow(() ->
+                        new ResponseStatusException(BAD_REQUEST, "Polling place not allocated for this election"));
+
+        validateTally(
+                mergedVotes,
+                invalid,
+                blank,
+                rej,
+                spo,
+                cast,
+                alloc.getRegisteredVoters(),
+                alloc.getBallotsIssued()
+        );
+
+        // ---- Apply updates ----
         mapper.apply(req, s);
         s.setVersion(s.getVersion() + 1);
+
+        // ---- Rebuild hash: now includes placeId (11 args) ----
         s.setSubmissionHash(buildSubmissionHash(
-                s.getOrganization().getOrgId(), s.getElection().getElectionId(), s.getPollingCenter().getCenterId(),
-                s.getAgent().getUserId(), s.getCandidateVotes(), s.getBallotsCast(), s.getInvalidBallots(),
-                s.getBlankBallots(), s.getRejectedBallots(), s.getSpoiledBallots()
+                s.getOrganization().getOrgId(),
+                s.getElection().getElectionId(),
+                s.getPollingCenter().getCenterId(),
+                s.getPollingPlace().getPlaceId(),
+                s.getAgent().getUserId(),
+                s.getCandidateVotes(),
+                s.getBallotsCast(),
+                s.getInvalidBallots(),
+                s.getBlankBallots(),
+                s.getRejectedBallots(),
+                s.getSpoiledBallots()
         ));
 
         VoteSubmission saved = voteSubmissionRepository.save(s);
@@ -372,17 +454,28 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         }
     }
 
-    private static String buildSubmissionHash(UUID orgId, UUID electionId, UUID centerId, UUID agentId,
-                                              String votesJson, int cast, int invalid, int blank, int rejected, int spoiled) {
-        String payload = orgId + "|" + electionId + "|" + centerId + "|" + agentId + "|" +
+    private static String buildSubmissionHash(UUID orgId,
+                                              UUID electionId,
+                                              UUID centerId,
+                                              UUID placeId,
+                                              UUID agentId,
+                                              String votesJson,
+                                              int cast,
+                                              int invalid,
+                                              int blank,
+                                              int rejected,
+                                              int spoiled) {
+        String payload = orgId + "|" + electionId + "|" + centerId + "|" + placeId + "|" + agentId + "|" +
                 votesJson + "|" + cast + "|" + invalid + "|" + blank + "|" + rejected + "|" + spoiled;
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(md.digest(payload.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
         }
     }
+
+
 
     private static int nz(Integer x){ return x==null?0:x; }
 

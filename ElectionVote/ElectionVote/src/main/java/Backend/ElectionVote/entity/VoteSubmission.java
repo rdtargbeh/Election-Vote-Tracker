@@ -38,6 +38,11 @@ public class VoteSubmission extends AuditBaseEntity {
     private PollingCenter pollingCenter;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "place_id", nullable = false,
+            foreignKey = @ForeignKey(name = "fk_vote_submission_place"))
+    private PollingPlace pollingPlace;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id", nullable = false)
     private SystemUser agent;
 

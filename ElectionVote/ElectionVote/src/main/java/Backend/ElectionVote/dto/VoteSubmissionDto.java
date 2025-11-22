@@ -22,9 +22,16 @@ public class VoteSubmissionDto {
     private String electionName;
     private int year;
 
+    // Polling Center
     private UUID centerId;
     private String centerCode;
     private String centerName;
+
+    // Polling Place
+    private UUID placeId;
+    private String placeCode;
+    private Integer placeNumber;
+    private String placeLabel;
 
     private UUID agentId;
     private String agentName;

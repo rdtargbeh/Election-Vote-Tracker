@@ -107,11 +107,16 @@ public class PollingCenterAllocationServiceImplementation implements PollingCent
     }
 
     private void validateNumbers(int registeredVoters, Integer ballotsIssued) {
-        if (registeredVoters < 0) throw new ResponseStatusException(BAD_REQUEST, "registeredVoters cannot be negative");
-        if (ballotsIssued != null && ballotsIssued < 0) throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot be negative");
-        if (ballotsIssued != null && ballotsIssued > registeredVoters)
+        if (registeredVoters < 0)
+            throw new ResponseStatusException(BAD_REQUEST, "registeredVoters cannot be negative");
+
+        int ballots = (ballotsIssued == null) ? 0 : ballotsIssued;
+        if (ballots < 0)
+            throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot be negative");
+        if (ballots > registeredVoters)
             throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot exceed registeredVoters");
     }
+
 
     /** When allocation changes, reflect into existing NECResult + nec_result_geo snapshot. */
     @Transactional

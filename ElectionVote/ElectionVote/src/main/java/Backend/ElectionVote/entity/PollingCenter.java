@@ -37,10 +37,6 @@ public class PollingCenter {
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 
-    @Min(0)
-    @Column(name = "registered_voters", nullable = false)
-    private int registeredVoters;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "district_id", nullable = false,
             foreignKey = @ForeignKey(name = "fk_center_district"))

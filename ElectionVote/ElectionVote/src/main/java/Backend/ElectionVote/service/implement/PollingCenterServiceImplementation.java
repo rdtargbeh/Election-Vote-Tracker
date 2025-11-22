@@ -7,11 +7,14 @@ import Backend.ElectionVote.mapper.PollingCenterMapper;
 import Backend.ElectionVote.repository.DistrictRepository;
 import Backend.ElectionVote.repository.PollingCenterRepository;
 import Backend.ElectionVote.service.PollingCenterService;
+import Backend.ElectionVote.utility.PollingCenterCodeGenerator;
 import Backend.ElectionVote.utility.PollingCenterSpecs;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
@@ -22,34 +25,59 @@ import static org.springframework.http.HttpStatus.*;
 @RequiredArgsConstructor
 public class PollingCenterServiceImplementation implements PollingCenterService {
 
-    private final PollingCenterRepository repository;
+    private final PollingCenterRepository pollingCenterRepository;
     private final DistrictRepository districtRepository;
     private final PollingCenterMapper mapper = new PollingCenterMapper();
 
+
     @Override
+    @Transactional
     public PollingCenterDto create(PollingCenterCreateRequest req) {
-        if (repository.existsByCodeIgnoreCase(req.getCode())) {
-            throw new ResponseStatusException(CONFLICT, "Polling center code already exists");
-        }
-        if (req.getRegisteredVoters() < 0) {
-            throw new ResponseStatusException(BAD_REQUEST, "registeredVoters cannot be negative");
-        }
 
+        // 1) Ensure district exists
         District district = districtRepository.findById(req.getDistrictId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "District not found"));
+                .orElseThrow(() -> new IllegalArgumentException("District not found"));
 
-        PollingCenter saved = repository.save(mapper.toEntity(req, district));
-        return mapper.toDTO(saved);
+        // 2) Generate a unique code (retry a few times just in case)
+        String code = generateUniqueCenterCode(district);
+
+        // 3) Map & build entity
+        PollingCenter entity = PollingCenter.builder()
+                .centerName(req.getCenterName())
+//                .registeredVoters(req.getRegisteredVoters())
+                .district(district)
+                .code(code)
+                .build();
+
+        try {
+            PollingCenter saved = pollingCenterRepository.save(entity);
+            return mapper.toDTO(saved);
+        } catch (DataIntegrityViolationException e) {
+            // If some race condition still happens with UNIQUE(code)
+            throw new IllegalStateException("Could not create polling center – code conflict", e);
+        }
     }
+
+    private String generateUniqueCenterCode(District district) {
+        int maxAttempts = 5;
+        for (int i = 0; i < maxAttempts; i++) {
+            String candidate = PollingCenterCodeGenerator.generateCode(district);
+            if (!pollingCenterRepository.existsByCodeIgnoreCase(candidate)) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("Failed to generate unique polling center code after several attempts");
+    }
+
 
     @Override
     public PollingCenterDto update(UUID id, PollingCenterUpdateRequest req) {
-        PollingCenter entity = repository.findById(id)
+        PollingCenter entity = pollingCenterRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
 
         // if code is changing, enforce uniqueness
         if (req.getCode() != null && !req.getCode().equalsIgnoreCase(entity.getCode())
-                && repository.existsByCodeIgnoreCase(req.getCode())) {
+                && pollingCenterRepository.existsByCodeIgnoreCase(req.getCode())) {
             throw new ResponseStatusException(CONFLICT, "Polling center code already exists");
         }
         if (req.getRegisteredVoters() != null && req.getRegisteredVoters() < 0) {
@@ -63,20 +91,20 @@ public class PollingCenterServiceImplementation implements PollingCenterService 
         }
 
         mapper.apply(req, entity, newDistrict);
-        return mapper.toDTO(repository.save(entity));
+        return mapper.toDTO(pollingCenterRepository.save(entity));
     }
 
     @Override
     public void delete(UUID id) {
         // (Optional) Protect if referenced by results/allocations
         // Consider soft-delete or check foreign key refs if needed.
-        if (!repository.existsById(id)) throw new ResponseStatusException(NOT_FOUND, "Polling center not found");
-        repository.deleteById(id);
+        if (!pollingCenterRepository.existsById(id)) throw new ResponseStatusException(NOT_FOUND, "Polling center not found");
+        pollingCenterRepository.deleteById(id);
     }
 
     @Override
     public PollingCenterDto get(UUID id) {
-        return repository.findById(id).map(mapper::toDTO)
+        return pollingCenterRepository.findById(id).map(mapper::toDTO)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
     }
 
@@ -87,6 +115,6 @@ public class PollingCenterServiceImplementation implements PollingCenterService 
                 .and(PollingCenterSpecs.countyEquals(countyId))
                 .and(PollingCenterSpecs.districtEquals(districtId));
 
-        return repository.findAll(spec, pageable).map(mapper::toDTO);
+        return pollingCenterRepository.findAll(spec, pageable).map(mapper::toDTO);
     }
 }

@@ -18,7 +18,7 @@ public class PollingCenterMapper {
                 .pollingCenterId(pc.getCenterId())
                 .centerName(pc.getCenterName())
                 .code(pc.getCode())
-                .registeredVoters(pc.getRegisteredVoters())
+//                .registeredVoters(pc.getRegisteredVoters())
                 .districtId(d != null ? d.getDistrictId() : null)
                 .districtName(d != null ? d.getDistrictName() : null)
                 .countyId(c != null ? c.getCountyId() : null)
@@ -30,8 +30,7 @@ public class PollingCenterMapper {
         if (req == null) return null;
         return PollingCenter.builder()
                 .centerName(req.getCenterName())
-                .code(req.getCode())
-                .registeredVoters(req.getRegisteredVoters())
+//                .registeredVoters(req.getRegisteredVoters())
                 .district(district)
                 .build();
     }
@@ -40,7 +39,7 @@ public class PollingCenterMapper {
         if (req == null || pc == null) return;
         if (req.getCenterName() != null) pc.setCenterName(req.getCenterName());
         if (req.getCode() != null) pc.setCode(req.getCode());
-        if (req.getRegisteredVoters() != null) pc.setRegisteredVoters(req.getRegisteredVoters());
+//        if (req.getRegisteredVoters() != null) pc.setRegisteredVoters(req.getRegisteredVoters());
         if (newDistrict != null) pc.setDistrict(newDistrict);
     }
 }

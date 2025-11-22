@@ -1,5 +1,7 @@
 package Backend.ElectionVote.repository;
 
+import Backend.ElectionVote.entity.Election;
+import Backend.ElectionVote.entity.PollingCenter;
 import Backend.ElectionVote.entity.PollingCenterAllocation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -18,6 +20,11 @@ public interface PollingCenterAllocationRepository  extends JpaRepository<Pollin
 
     boolean existsByElection_ElectionIdAndPollingCenter_CenterId(
             UUID electionId, UUID centerId);
+
+    Optional<PollingCenterAllocation> findByElectionAndPollingCenter(
+            Election election,
+            PollingCenter pollingCenter
+    );
 
 
 

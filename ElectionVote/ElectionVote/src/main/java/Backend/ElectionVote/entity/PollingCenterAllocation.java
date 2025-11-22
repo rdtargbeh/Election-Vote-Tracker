@@ -49,4 +49,9 @@ public class PollingCenterAllocation extends AuditBaseEntity{
 
     @Column(name = "ballots_issued")
     private Integer ballotsIssued;
+
+    @PrePersist
+    public void prePersist() {
+        if (ballotsIssued == null) ballotsIssued = 0;
+    }
 }

@@ -25,12 +25,6 @@ import java.util.UUID;
                 @Index(name = "idx_nec_result_upload_time", columnList = "upload_time")
         }
 )
-//@Table(
-//        name = "nec_result",
-//        uniqueConstraints = {
-//                @UniqueConstraint(name = "uq_nec_election_center", columnNames = {"election_id", "center_id"})
-//        }
-//)
 public class NECResult {
 
     @Id
