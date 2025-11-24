@@ -3,6 +3,7 @@ package Backend.ElectionVote.controller;
 import Backend.ElectionVote.dto.PartyCreateRequest;
 import Backend.ElectionVote.dto.PartyDto;
 import Backend.ElectionVote.dto.PartyUpdateRequest;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.PartyService;
 import Backend.ElectionVote.utility.PartySearchRequest;
 import jakarta.validation.Valid;
@@ -23,8 +24,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PartyController {
 
-    @Autowired
-    private PartyService partyService;
+    private final AuthorizationService authz;
+    private final PartyService partyService;
 
 
     @GetMapping("/{id}")
@@ -57,10 +58,5 @@ public class PartyController {
     }
 
 
-    // Move to PlatformAdminController
-//    @PostMapping
-//    public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
-//        return ResponseEntity.status(HttpStatus.CREATED).body(partyService.create(req));
-//    }
 
 }

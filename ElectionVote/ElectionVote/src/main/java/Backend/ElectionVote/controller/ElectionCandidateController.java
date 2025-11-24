@@ -1,6 +1,7 @@
 package Backend.ElectionVote.controller;
 
 import Backend.ElectionVote.dto.*;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.ElectionCandidateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,21 +17,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ElectionCandidateController {
 
+    private final AuthorizationService authz;
     private final ElectionCandidateService electionCandidateService;
 
 
     @PostMapping
     public ElectionCandidateDto create(@Valid @RequestBody ElectionCandidateCreateRequest req) {
+        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
         return electionCandidateService.create(req);
     }
 
     @PutMapping("/{id}")
     public ElectionCandidateDto update(@PathVariable UUID id, @RequestBody ElectionCandidateUpdateRequest req) {
+        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
         return electionCandidateService.update(id, req);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
+        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
         electionCandidateService.delete(id);
     }
 
