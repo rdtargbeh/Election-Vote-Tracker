@@ -14,8 +14,10 @@ public class ElectionCandidateDto {
     private UUID electId;
     private UUID electionId;
     private String electionName;
+
     private UUID candidateId;
-    private String candidateName;
-    private UUID pollingCenterId;
-    private String pollingCenterName;
+    private String fullName;
+
+    private UUID centerId;
+    private String centerName;
 }

@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -165,18 +166,36 @@ public class ElectionServiceImplementation implements ElectionService {
     public ElectionStatsDto getOrgElectionStats(UUID orgId, UUID electionId) {
         ElectionStatsProjection p = statsRepository
                 .findOrgElectionStats(orgId, electionId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        NOT_FOUND, "No stats found for org/election combination"));
+                .orElse(null);
+
+        if (p == null) {
+            // No row yet → return empty stats instead of error
+            return ElectionStatsDto.builder()
+                    .orgId(orgId)
+                    .electionId(electionId)
+                    .registeredVoters(0)
+                    .ballotsCast(0)
+                    .validVotes(0)
+                    .invalidTotal(0)
+                    .turnoutPct(BigDecimal.ZERO)
+                    .invalidPct(BigDecimal.ZERO)
+                    .build();
+        }
 
         return ElectionStatsDto.builder()
                 .orgId(p.getOrgId())
                 .electionId(p.getElectionId())
-                .registeredVoters(p.getRegisteredVoters())
-                .ballotsCast(p.getBallotsCast())
-                .validVotes(p.getValidVotes())
-                .invalidTotal(p.getInvalidTotal())
-                .turnoutPct(p.getTurnoutPct())
-                .invalidPct(p.getInvalidPct())
+                .registeredVoters(p.getRegisteredVoters() != null ? p.getRegisteredVoters() : 0)
+                .ballotsCast(p.getBallotsCast() != null ? p.getBallotsCast() : 0)
+                .validVotes(p.getValidVotes() != null ? p.getValidVotes() : 0)
+                .invalidTotal(p.getInvalidTotal() != null ? p.getInvalidTotal() : 0)
+                .turnoutPct(p.getTurnoutPct() != null ? p.getTurnoutPct() : BigDecimal.ZERO)
+                .invalidPct(p.getInvalidPct() != null ? p.getInvalidPct() : BigDecimal.ZERO)
                 .build();
     }
+
+
+
+
+
 }

@@ -63,4 +63,6 @@ public class PollingPlaceController {
     public PollingPlaceDto deactivate(@PathVariable("id") UUID id) {
         return pollingPlaceService.deactivate(id);
     }
+
+
 }

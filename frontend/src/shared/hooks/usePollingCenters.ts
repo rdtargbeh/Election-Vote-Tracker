@@ -1,4 +1,3 @@
-
 // src/shared/hook/usePollingCenters.ts
 // ------------------------------------------------------
 // React Query hook to load polling centers for a given
@@ -6,6 +5,12 @@
 //
 // Uses pollingCenterService:
 //   GET /api/polling-centers?districtId=...
+// ------------------------------------------------------
+
+// src/shared/hook/usePollingCenters.ts
+// ------------------------------------------------------
+// Loads polling centers for a given district.
+// Pattern is identical to useDistricts.
 // ------------------------------------------------------
 
 import { useQuery } from "@tanstack/react-query";

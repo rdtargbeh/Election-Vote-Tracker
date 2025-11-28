@@ -1,23 +1,25 @@
-
 // src/shared/services/pollingCenterService.ts
-// ------------------------------------------------------
-// Service wrapper for Polling Centers.
-//
-// Backend expectation:
-//   GET /api/polling-centers?districtId=<UUID>&q=<optional>
-//
-// This returns a simple list of PollingCenterDto.
-// ------------------------------------------------------
 
 import { apiClient } from "../lib/apiClient";
 
 export interface PollingCenterDto {
-  centerId: string;
+  centerId: string; // normalized ID used by the UI
   centerName: string;
   code: string;
   registeredVoters: number;
+  districtId?: string;
+  districtName?: string;
+  countyId?: string;
+  countyName?: string;
+}
 
-  // Optional extra fields if your backend includes them
+// Raw shape from backend – it might use `id` instead of `centerId`
+interface PollingCenterDtoRaw {
+  id?: string;
+  centerId?: string;
+  centerName: string;
+  code: string;
+  registeredVoters: number;
   districtId?: string;
   districtName?: string;
   countyId?: string;
@@ -29,23 +31,42 @@ export interface PollingCenterQuery {
   q?: string;
 }
 
-/**
- * Fetch polling centers from the backend.
- */
+// Generic Spring Data page response
+interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
 export async function fetchPollingCenters(
   params: PollingCenterQuery = {}
 ): Promise<PollingCenterDto[]> {
-  const { districtId, q } = params;
+  const res = await apiClient.get<PageResponse<PollingCenterDtoRaw>>(
+    "/polling-centers",
+    {
+      params,
+    }
+  );
 
-  const searchParams = new URLSearchParams();
-  if (districtId) searchParams.append("districtId", districtId);
-  if (q && q.trim()) searchParams.append("q", q.trim());
+  const raw = res.data.content ?? [];
 
-  const queryString = searchParams.toString();
-  const url = queryString
-    ? `/polling-centers?${queryString}`
-    : "/polling-centers";
+  // Normalize centerId so the rest of the app can rely on it
+  return raw.map((c) => {
+    const normalizedId = c.centerId ?? c.id;
+    if (!normalizedId) {
+      // Fall back to a stable but non-ideal key if needed
+      // (should not happen if backend always provides some ID)
+      return {
+        ...c,
+        centerId: "",
+      };
+    }
 
-  const res = await apiClient.get<PollingCenterDto[]>(url);
-  return res.data;
+    return {
+      ...c,
+      centerId: normalizedId,
+    };
+  });
 }

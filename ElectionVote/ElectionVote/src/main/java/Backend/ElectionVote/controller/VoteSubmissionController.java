@@ -30,17 +30,33 @@ public class VoteSubmissionController {
     private final VoteSubmissionService voteSubmissionService;
 
 
-    // -------- CREATE (handles both with and without files) --------
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public VoteSubmissionDto create(
-            @RequestPart("payload") VoteSubmissionCreateRequest req,
-            @RequestPart(value = "files", required = false) List<MultipartFile> files
+
+
+    @PostMapping(
+            path = "/json",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    public VoteSubmissionDto createFromJson(
+            @RequestBody @Valid VoteSubmissionCreateRequest req
     ) {
-        // if files are present, call the overloaded method
-        return (files != null && !files.isEmpty())
-                ? voteSubmissionService.create(req, files)
-                : voteSubmissionService.create(req);
+        // you already have this service:
+        // public VoteSubmissionDto create(VoteSubmissionCreateRequest req)
+        return voteSubmissionService.create(req);
     }
+
+
+    // -------- CREATE (handles both with and without files) --------
+//    @PostMapping(path = "", consumes = MediaType.APPLICATION_JSON_VALUE)
+//    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+//    public VoteSubmissionDto create(
+//            @RequestPart("payload") VoteSubmissionCreateRequest req,
+//            @RequestPart(value = "files", required = false) List<MultipartFile> files
+//    ) {
+//        // if files are present, call the overloaded method
+//        return (files != null && !files.isEmpty())
+//                ? voteSubmissionService.create(req, files)
+//                : voteSubmissionService.create(req);
+//    }
 
     // -------- UPDATE (handles both with and without files) --------
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

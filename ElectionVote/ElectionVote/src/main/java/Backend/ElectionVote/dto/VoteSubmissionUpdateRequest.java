@@ -10,7 +10,12 @@ import java.util.UUID;
 @Setter
 public class VoteSubmissionUpdateRequest {
     private Map<UUID,Integer> candidateVotes;
-    private Integer ballotsCast, invalidBallots, blankBallots, rejectedBallots, spoiledBallots;
+    private Integer ballotsCast;
+    private Integer invalidBallots;
+    private Integer blankBallots;
+    private Integer rejectedBallots;
+    private Integer spoiledBallots;
+    private Integer discrepency ;
     private String comments;
     private Double latitude, longitude;
 }

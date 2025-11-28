@@ -93,12 +93,39 @@ public class PollingPlaceAllocationServiceImplementation implements PollingPlace
         return repo.findAll(spec, pageable).map(mapper::toDTO);
     }
 
+    /** Validate Ballots Issued **/
     private void validateNumbers(int registeredVoters, Integer ballotsIssued) {
-        if (registeredVoters < 0)
+        // 1) Basic sanity checks
+        if (registeredVoters < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "registeredVoters cannot be negative");
-        if (ballotsIssued != null && ballotsIssued < 0)
+        }
+        // Allow "no ballots assigned yet" if null
+        if (ballotsIssued == null) {
+            return;
+        }
+        if (ballotsIssued < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot be negative");
-        if (ballotsIssued != null && ballotsIssued > registeredVoters)
-            throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot exceed registeredVoters");
+        }
+        // 2) Real-world rule: ballotsIssued should normally be >= registeredVoters
+        if (ballotsIssued < registeredVoters) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "ballotsIssued should be greater than or equal to registeredVoters to avoid ballot shortage"
+            );
+        }
+        // 3) Anti-fraud / sanity upper bound: max 20% spare ballots
+        //    maxAllowed = registeredVoters + ceil(20% of registeredVoters)
+        int spare = (int) Math.ceil(registeredVoters * 0.20);
+        int maxAllowed = registeredVoters + spare;
+
+        if (ballotsIssued > maxAllowed) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "ballotsIssued cannot exceed " + maxAllowed +
+                            " (20% spare ballot cap for registeredVoters=" + registeredVoters + ")"
+            );
+        }
     }
+
+
 }

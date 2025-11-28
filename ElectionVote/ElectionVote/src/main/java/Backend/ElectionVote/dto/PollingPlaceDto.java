@@ -9,11 +9,15 @@ import java.util.UUID;
 @Builder
 public class PollingPlaceDto {
 
+    // Place
     private UUID placeId;
+    private Integer placeNumber;
+    private String code;
+    private String label;
 
     private UUID centerId;
-    private String centerCode;
     private String centerName;
+    private String centerCode;
 
     // District
     private UUID districtId;
@@ -23,10 +27,6 @@ public class PollingPlaceDto {
     private UUID countyId;
     private String countyName;
 
-    // Place
-    private Integer placeNumber;
-    private String code;
-    private String label;
-
     private boolean active;
+
 }

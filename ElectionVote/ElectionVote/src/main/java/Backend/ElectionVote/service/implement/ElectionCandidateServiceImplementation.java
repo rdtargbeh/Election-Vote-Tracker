@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.*;
@@ -135,6 +136,25 @@ public class ElectionCandidateServiceImplementation implements ElectionCandidate
                 .map(mapper::toDTO)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election candidate not found"));
     }
+
+
+    @Override
+    public List<ElectionCandidateDto> listByElection(UUID electionId) {
+        // Optional: verify election exists (helps return 404 instead of empty list if typo)
+        electionRepo.findById(electionId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        NOT_FOUND,
+                        "Election not found"
+                ));
+
+        return electionCandidateRepository
+                .findByElection_ElectionId(electionId)
+                .stream()
+                .map(mapper::toDTO)
+                .toList();
+    }
+
+
 
     @Override
     public Page<ElectionCandidateDto> getAll(Pageable pageable) {

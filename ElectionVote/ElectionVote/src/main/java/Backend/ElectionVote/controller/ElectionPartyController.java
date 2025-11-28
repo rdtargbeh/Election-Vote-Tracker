@@ -35,6 +35,7 @@ public class ElectionPartyController {
      * Security: Platform-level admin only (central NEC control).
      */
     @PostMapping("/{electionId}/parties")
+//    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ElectionPartyDto addPartyToElection(
             @PathVariable UUID electionId,

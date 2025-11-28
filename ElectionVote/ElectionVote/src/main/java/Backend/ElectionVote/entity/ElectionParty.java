@@ -2,11 +2,7 @@ package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.utility.ElectionPartyId;
 import jakarta.persistence.*;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
+import lombok.*;
 
 
 @Entity
@@ -23,6 +19,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class ElectionParty {
 
     @EmbeddedId

@@ -25,19 +25,19 @@ public class PollingCenterController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PollingCenterDto create(@Valid @RequestBody PollingCenterCreateRequest req) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         return service.create(req);
     }
 
     @PutMapping("/{id}")
     public PollingCenterDto update(@PathVariable UUID id, @RequestBody PollingCenterUpdateRequest req) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         service.delete(id);
     }
 
@@ -51,8 +51,20 @@ public class PollingCenterController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) UUID countyId,
             @RequestParam(required = false) UUID districtId,
-            @PageableDefault(size = 20, sort = "centerName") Pageable pageable
+            @PageableDefault(size = 50, sort = "centerName") Pageable pageable
     ) {
         return service.search(q, countyId, districtId, pageable);
     }
+
+//
+//    @GetMapping
+//    public Page<PollingCenterDto> search(
+//            @RequestParam(required = false) UUID districtId,
+//            @PageableDefault(size = 100, sort = "centerName") Pageable pageable
+//    ) {
+//        // If you already have a search method, just wire districtId into it.
+//        return service.search(districtId, pageable);
+//    }
+
+
 }

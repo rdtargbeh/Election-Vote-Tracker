@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.*;
@@ -35,7 +34,7 @@ public class PollingCenterAllocationServiceImplementation implements PollingCent
     public PollingCenterAllocationDto create(PollingCenterAllocationCreateRequest req) {
         var election = electionRepo.findById(req.getElectionId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
-        var center = centerRepo.findById(req.getPollingCenterId())
+        var center = centerRepo.findById(req.getCenterId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
 
         if (repository.existsByElection_ElectionIdAndPollingCenter_CenterId(election.getElectionId(), center.getCenterId())) {
@@ -106,16 +105,40 @@ public class PollingCenterAllocationServiceImplementation implements PollingCent
         return repository.findAll(spec, pageable).map(mapper::toDTO);
     }
 
+    /** Validate Ballots Issued **/
     private void validateNumbers(int registeredVoters, Integer ballotsIssued) {
-        if (registeredVoters < 0)
+        // 1) Basic sanity checks
+        if (registeredVoters < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "registeredVoters cannot be negative");
-
-        int ballots = (ballotsIssued == null) ? 0 : ballotsIssued;
-        if (ballots < 0)
+        }
+        // Allow "no ballots assigned yet" if null
+        if (ballotsIssued == null) {
+            return;
+        }
+        if (ballotsIssued < 0) {
             throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot be negative");
-        if (ballots > registeredVoters)
-            throw new ResponseStatusException(BAD_REQUEST, "ballotsIssued cannot exceed registeredVoters");
+        }
+        // 2) Real-world rule: ballotsIssued should normally be >= registeredVoters
+        if (ballotsIssued < registeredVoters) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "ballotsIssued should be greater than or equal to registeredVoters to avoid ballot shortage"
+            );
+        }
+        // 3) Anti-fraud / sanity upper bound: max 20% spare ballots
+        //    maxAllowed = registeredVoters + ceil(20% of registeredVoters)
+        int spare = (int) Math.ceil(registeredVoters * 0.20);
+        int maxAllowed = registeredVoters + spare;
+
+        if (ballotsIssued > maxAllowed) {
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "ballotsIssued cannot exceed " + maxAllowed +
+                            " (20% spare ballot cap for registeredVoters=" + registeredVoters + ")"
+            );
+        }
     }
+
 
 
     /** When allocation changes, reflect into existing NECResult + nec_result_geo snapshot. */

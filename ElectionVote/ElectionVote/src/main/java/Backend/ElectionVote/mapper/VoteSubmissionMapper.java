@@ -45,12 +45,13 @@ public class VoteSubmissionMapper {
             lat = s.getGpsLocation().getY();
         }
 
-        // name handling
         String agentName = a != null ? a.getFirstName() + " " + a.getLastName() : null;
         String verifiedByName = v != null ? v.getFirstName() + " " + v.getLastName() : null;
 
-        // structured votes map
-        Map<UUID, Integer> votesMap = readVotes(s.getCandidateVotes());
+        // candidateVotes now comes directly from the entity as a Map
+        Map<UUID, Integer> votesMap =
+                s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap();
+
         int validVotes = votesMap.values().stream().mapToInt(Integer::intValue).sum();
 
         int invalidTotal =
@@ -59,13 +60,17 @@ public class VoteSubmissionMapper {
                         nz(s.getRejectedBallots()) +
                         nz(s.getSpoiledBallots());
 
+        // These are left null; your stats endpoint can compute them
         Double turnoutPct = null;
         Double invalidPct = null;
 
-//        if (s.getBallotsCast() != null && s.getBallotsCast() > 0) {
-//            turnoutPct = (s.getBallotsCast() / (double)(c.getRegisteredVoters())) * 100.0;
-//            invalidPct = (invalidTotal / (double) s.getBallotsCast()) * 100.0;
-//        }
+        // Serialize Map -> JSON string for the DTO field
+        String candidateVotesJson = null;
+        try {
+            candidateVotesJson = objectMapper.writeValueAsString(votesMap);
+        } catch (Exception ex) {
+            candidateVotesJson = "{}"; // safe fallback
+        }
 
         return VoteSubmissionDto.builder()
                 .submissionId(s.getSubmissionId())
@@ -98,8 +103,8 @@ public class VoteSubmissionMapper {
                 .turnoutPct(turnoutPct)
                 .invalidPct(invalidPct)
 
-                // raw json (from DB)
-                .candidateVotesJson(s.getCandidateVotes())
+                // raw JSON for frontend (if needed)
+                .candidateVotesJson(candidateVotesJson)
                 // structured map for frontend
                 .candidateVotes(votesMap)
 
@@ -108,6 +113,7 @@ public class VoteSubmissionMapper {
                 .blankBallots(s.getBlankBallots())
                 .rejectedBallots(s.getRejectedBallots())
                 .spoiledBallots(s.getSpoiledBallots())
+                .discrepency(s.getDiscrepency())
                 .status(s.getStatus())
                 .comments(s.getComments())
 
@@ -122,12 +128,6 @@ public class VoteSubmissionMapper {
                 .userAgent(s.getUserAgent())
                 .submissionHash(s.getSubmissionHash())
                 .version(s.getVersion())
-
-                // enhanced derived values
-                .validVotes(validVotes)
-                .invalidTotal(invalidTotal)
-                .turnoutPct(null)      // computed by stats endpoint, not mapper
-                .invalidPct(null)      // computed by stats endpoint, not mapper
 
                 .build();
     }
@@ -146,13 +146,15 @@ public class VoteSubmissionMapper {
         s.setPollingCenter(c);
         s.setAgent(agent);
 
-        s.setCandidateVotes(writeVotes(req.getCandidateVotes()));
+        // Store Map directly; Hibernate will handle JSONB
+        s.setCandidateVotes(req.getCandidateVotes());
 
         s.setBallotsCast(nz(req.getBallotsCast()));
         s.setInvalidBallots(nz(req.getInvalidBallots()));
         s.setBlankBallots(nz(req.getBlankBallots()));
         s.setRejectedBallots(nz(req.getRejectedBallots()));
         s.setSpoiledBallots(nz(req.getSpoiledBallots()));
+        s.setDiscrepency(req.getDiscrepency());
 
         s.setStatus(VoteStatus.PENDING);
         s.setComments(req.getComments());
@@ -172,7 +174,7 @@ public class VoteSubmissionMapper {
     public void apply(VoteSubmissionUpdateRequest req, VoteSubmission s) {
 
         if (req.getCandidateVotes() != null)
-            s.setCandidateVotes(writeVotes(req.getCandidateVotes()));
+            s.setCandidateVotes(req.getCandidateVotes());
 
         if (req.getBallotsCast() != null)
             s.setBallotsCast(req.getBallotsCast());
@@ -188,6 +190,9 @@ public class VoteSubmissionMapper {
 
         if (req.getSpoiledBallots() != null)
             s.setSpoiledBallots(req.getSpoiledBallots());
+
+        if (req.getDiscrepency() != null)
+            s.setDiscrepency(req.getDiscrepency());
 
         if (req.getComments() != null)
             s.setComments(req.getComments());
@@ -205,28 +210,8 @@ public class VoteSubmissionMapper {
         return p;
     }
 
-    private String writeVotes(Map<UUID, Integer> map) {
-        try {
-            return objectMapper.writeValueAsString(map);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid candidateVotes JSON");
-        }
-    }
-
-    private Map<UUID, Integer> readVotes(String json) {
-        try {
-            return objectMapper.readValue(
-                    json,
-                    new TypeReference<Map<UUID, Integer>>() {}
-            );
-        } catch (Exception ex) {
-            return Collections.emptyMap(); // safe fallback for corrupted data
-        }
-    }
-
     private static int nz(Integer x) {
         return x == null ? 0 : x;
     }
-
 
 }

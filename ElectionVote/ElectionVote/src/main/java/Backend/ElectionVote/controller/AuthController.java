@@ -5,6 +5,7 @@ import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.SystemUser;
 import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.security.TokenService;
+import Backend.ElectionVote.service.AuditLogService;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class AuthController {
     private final AuthenticationManager authManager;
     private final TokenService tokenService;
     private final SystemUserRepository systemUserRepository; // <-- add this
+    private final AuditLogService auditLogService;
 
     // Request DTO
     public record LoginRequest(String userName, String password) { }

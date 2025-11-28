@@ -17,10 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
@@ -145,12 +142,9 @@ public class VoteDetailServiceImplementation implements VoteDetailService {
     }
 
     // ---------- helpers ----------
-    private static Map<UUID,Integer> parseVotes(String json) {
-        try {
-            var type = new com.fasterxml.jackson.core.type.TypeReference<Map<UUID,Integer>>() {};
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, type);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(BAD_REQUEST, "Invalid candidate_votes JSON");
-        }
+    // ---------- helpers ----------
+    private static Map<UUID, Integer> parseVotes(Map<UUID, Integer> votes) {
+        return (votes != null) ? votes : Collections.emptyMap();
     }
+
 }

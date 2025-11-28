@@ -20,9 +20,9 @@ public class ElectionCandidateMapper {
                 .electionId(ec.getElection() != null ? ec.getElection().getElectionId() : null)
                 .electionName(ec.getElection() != null ? ec.getElection().getElectionName() : null)
                 .candidateId(ec.getCandidate() != null ? ec.getCandidate().getCandidateId() : null)
-                .candidateName(ec.getCandidate() != null ? ec.getCandidate().getFullName() : null)
-                .pollingCenterId(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterId() : null)
-                .pollingCenterName(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterName() : null)
+                .fullName(ec.getCandidate() != null ? ec.getCandidate().getFullName() : null)
+                .centerId(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterId() : null)
+                .centerName(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterName() : null)
                 .build();
     }
 

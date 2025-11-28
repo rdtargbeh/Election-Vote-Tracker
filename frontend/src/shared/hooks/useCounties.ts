@@ -1,5 +1,3 @@
-
-
 // src/shared/hooks/useCounties.ts
 // ------------------------------------------------------
 // Simple counties hook: returns an array<CountyDto>.
@@ -13,19 +11,12 @@
 // ------------------------------------------------------
 
 import { useQuery } from "@tanstack/react-query";
-import { fetchCounties, type CountyDto } from "../services/countyService";
+import { fetchCounties, type CountyDto } from "../services/geographyService";
 
-/**
- * Simple counties hook.
- *
- * Example:
- *   const { data: counties } = useCounties();
- *   counties?.map(c => <option ...>{c.countyName}</option>)
- */
-export function useCounties(q?: string) {
+export function useCounties() {
   return useQuery<CountyDto[], Error>({
-    queryKey: ["counties-simple", { q }],
-    queryFn: () => fetchCounties(q),
-    staleTime: 5 * 60_000, // 5 minutes
+    queryKey: ["counties"],
+    queryFn: () => fetchCounties(),
+    staleTime: 5 * 60_000, // 5 minutes - fairly static reference data
   });
 }

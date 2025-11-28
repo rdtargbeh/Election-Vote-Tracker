@@ -15,7 +15,7 @@ public class PollingCenterMapper {
         County c = (d != null) ? d.getCounty() : null;
 
         return PollingCenterDto.builder()
-                .pollingCenterId(pc.getCenterId())
+                .centerId(pc.getCenterId())
                 .centerName(pc.getCenterName())
                 .code(pc.getCode())
 //                .registeredVoters(pc.getRegisteredVoters())

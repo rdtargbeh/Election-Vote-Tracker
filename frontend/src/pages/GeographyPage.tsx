@@ -1,42 +1,44 @@
-
-
 // src/pages/GeographyPage.tsx
 // ------------------------------------------------------
 // Geography & Centers view:
-//   County → District → Polling Centers
-//
-// Uses hooks:
-//   useCounties()        -> /api/counties
-//   useDistricts(county) -> /api/districts?countyId=...
-//   usePollingCenters(d) -> /api/polling-centers?districtId=...
+//   County → District → Polling Centers → Polling Places
 // ------------------------------------------------------
 
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { useAuthStore } from "../shared/store/authStore";
-import { useCounties } from "../shared/hook/useCounties";
-import { useDistricts } from "../shared/hook/useDistricts";
-import { usePollingCenters } from "../shared/hook/usePollingCenters";
+import { useCounties } from "../shared/hooks/useCounties";
+import { useDistricts } from "../shared/hooks/useDistricts";
+import { usePollingCenters } from "../shared/hooks/usePollingCenters";
+import { usePollingPlaces } from "../shared/hooks/usePollingPlaces";
 
 const GeographyPage: React.FC = () => {
   const navigate = useNavigate();
-  const currentOrgId = useAuthStore((state) => state.currentOrgId);
-  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const currentOrgId = useAuthStore((s) => s.currentOrgId);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
 
-  // Counties
+  // ───────────────────────────────────────────────
+  // County → District → Center → Places (state)
+  // ───────────────────────────────────────────────
   const countiesQuery = useCounties();
   const [selectedCountyId, setSelectedCountyId] = useState<string | null>(null);
 
-  // Districts depend on county
   const districtsQuery = useDistricts(selectedCountyId);
   const [selectedDistrictId, setSelectedDistrictId] = useState<string | null>(
     null
   );
 
-  // Polling centers depend on district
   const centersQuery = usePollingCenters(selectedDistrictId);
+  const [selectedCenterId, setSelectedCenterId] = useState<string | null>(null);
 
-  // Auto-select first county when data loads
+  const placesQuery = usePollingPlaces(selectedCenterId);
+
+  // ───────────────────────────────────────────────
+  // Auto-select the first available items
+  // ───────────────────────────────────────────────
+
+  // Counties
   useEffect(() => {
     if (
       countiesQuery.data &&
@@ -47,14 +49,13 @@ const GeographyPage: React.FC = () => {
     }
   }, [countiesQuery.data, selectedCountyId]);
 
-  // Auto-select first district when districts load or county changes
+  // Districts
   useEffect(() => {
     if (districtsQuery.data && districtsQuery.data.length > 0) {
-      // If current selected district doesn't belong to this list, reset
-      const stillExists = districtsQuery.data.some(
+      const exists = districtsQuery.data.some(
         (d) => d.districtId === selectedDistrictId
       );
-      if (!stillExists) {
+      if (!exists) {
         setSelectedDistrictId(districtsQuery.data[0].districtId);
       }
     } else {
@@ -62,14 +63,31 @@ const GeographyPage: React.FC = () => {
     }
   }, [districtsQuery.data, selectedDistrictId]);
 
+  // Centers
+  useEffect(() => {
+    if (centersQuery.data && centersQuery.data.length > 0) {
+      const exists = centersQuery.data.some(
+        (c) => c.centerId === selectedCenterId
+      );
+      if (!exists) {
+        setSelectedCenterId(centersQuery.data[0].centerId);
+      }
+    } else {
+      setSelectedCenterId(null);
+    }
+  }, [centersQuery.data, selectedCenterId]);
+
   const handleLogout = () => {
     clearAuth();
     navigate("/login");
   };
 
+  // ───────────────────────────────────────────────
+  // UI layout
+  // ───────────────────────────────────────────────
   return (
     <div className="min-h-screen flex bg-slate-100">
-      {/* Sidebar (same style as Dashboard for consistency) */}
+      {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-slate-50 flex flex-col">
         <div className="px-4 py-4 border-b border-slate-800">
           <h1 className="text-lg font-bold">Election Vote Tracker</h1>
@@ -95,15 +113,13 @@ const GeographyPage: React.FC = () => {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col">
-        {/* Top bar */}
         <header className="h-14 px-6 flex items-center justify-between bg-white border-b border-slate-200">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">
               Geography &amp; Centers
             </h2>
             <p className="text-xs text-slate-500">
-              Explore counties, districts, and polling centers. Later this will
-              drive center-level stats and allocations.
+              Drill down from counties → districts → centers → places.
             </p>
           </div>
 
@@ -115,185 +131,143 @@ const GeographyPage: React.FC = () => {
           </button>
         </header>
 
-        {/* Body */}
+        {/* 4-column drill-down */}
         <main className="flex-1 p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Counties column */}
-            <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">
-                Counties
-              </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Counties */}
+            <section className="bg-white rounded-xl shadow-sm border p-4">
+              <h3 className="text-sm font-semibold mb-2">Counties</h3>
 
-              {countiesQuery.isLoading ? (
+              {countiesQuery.isLoading && (
                 <p className="text-xs text-slate-500">Loading counties…</p>
-              ) : countiesQuery.isError ? (
-                <p className="text-xs text-red-600">
-                  Error loading counties. Check API /api/counties.
-                </p>
-              ) : countiesQuery.data && countiesQuery.data.length > 0 ? (
-                <ul className="space-y-1">
-                  {countiesQuery.data.map((county) => {
-                    const isActive = county.countyId === selectedCountyId;
-                    return (
-                      <li key={county.countyId}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedCountyId(county.countyId)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm ${
-                            isActive
-                              ? "bg-blue-600 text-white"
-                              : "hover:bg-slate-100"
-                          }`}
-                        >
-                          {county.countyName}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-xs text-slate-500">No counties defined.</p>
               )}
+              {countiesQuery.isError && (
+                <p className="text-xs text-red-600">
+                  Error loading counties. Check /api/counties.
+                </p>
+              )}
+
+              {countiesQuery.data?.map((county) => (
+                <button
+                  key={county.countyId}
+                  onClick={() => setSelectedCountyId(county.countyId)}
+                  className={`block w-full text-left px-3 py-2 rounded-md text-sm ${
+                    county.countyId === selectedCountyId
+                      ? "bg-blue-600 text-white"
+                      : "hover:bg-slate-100"
+                  }`}
+                >
+                  {county.countyName}
+                </button>
+              ))}
             </section>
 
-            {/* Districts column */}
-            <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">
-                Districts
-              </h3>
+            {/* Districts */}
+            <section className="bg-white rounded-xl shadow-sm border p-4">
+              <h3 className="text-sm font-semibold mb-2">Districts</h3>
 
               {!selectedCountyId && (
                 <p className="text-xs text-slate-500">
-                  Select a county on the left to view districts.
+                  Select a county to view districts.
                 </p>
               )}
-
               {selectedCountyId && districtsQuery.isLoading && (
                 <p className="text-xs text-slate-500">Loading districts…</p>
               )}
-
               {selectedCountyId && districtsQuery.isError && (
                 <p className="text-xs text-red-600">
-                  Error loading districts. Check API /api/districts.
+                  Error loading districts. Check /api/districts.
                 </p>
               )}
 
-              {selectedCountyId &&
-                districtsQuery.data &&
-                districtsQuery.data.length === 0 && (
-                  <p className="text-xs text-slate-500">
-                    No districts found for this county.
-                  </p>
-                )}
-
-              {selectedCountyId &&
-                districtsQuery.data &&
-                districtsQuery.data.length > 0 && (
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="text-left border-b border-slate-200">
-                        <th className="py-2 pr-2 font-medium text-slate-600">
-                          District Name
-                        </th>
-                        <th className="py-2 pr-2 font-medium text-slate-600">
-                          County
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {districtsQuery.data.map((d) => {
-                        const isActive = d.districtId === selectedDistrictId;
-                        return (
-                          <tr
-                            key={d.districtId}
-                            className={`border-b border-slate-100 last:border-0 cursor-pointer ${
-                              isActive ? "bg-blue-50" : "hover:bg-slate-50"
-                            }`}
-                            onClick={() => setSelectedDistrictId(d.districtId)}
-                          >
-                            <td className="py-1.5 pr-2 text-slate-800">
-                              {d.districtName}
-                            </td>
-                            <td className="py-1.5 pr-2 text-slate-500">
-                              {d.countyName}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
+              {districtsQuery.data?.map((d) => (
+                <button
+                  key={d.districtId}
+                  onClick={() => setSelectedDistrictId(d.districtId)}
+                  className={`block w-full text-left px-3 py-2 rounded-md text-sm ${
+                    d.districtId === selectedDistrictId
+                      ? "bg-blue-600 text-white"
+                      : "hover:bg-slate-100"
+                  }`}
+                >
+                  {d.districtName}
+                </button>
+              ))}
             </section>
 
-            {/* Polling Centers column */}
-            <section className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">
-                Polling Centers
-              </h3>
+            {/* Polling Centers */}
+            <section className="bg-white rounded-xl shadow-sm border p-4">
+              <h3 className="text-sm font-semibold mb-2">Polling Centers</h3>
 
               {!selectedDistrictId && (
                 <p className="text-xs text-slate-500">
                   Select a district to view polling centers.
                 </p>
               )}
-
               {selectedDistrictId && centersQuery.isLoading && (
                 <p className="text-xs text-slate-500">
                   Loading polling centers…
                 </p>
               )}
-
               {selectedDistrictId && centersQuery.isError && (
                 <p className="text-xs text-red-600">
-                  Error loading centers. Check API /api/polling-centers.
+                  Error loading polling centers. Check /api/polling-centers.
                 </p>
               )}
 
-              {selectedDistrictId &&
-                centersQuery.data &&
-                centersQuery.data.length === 0 && (
+              {centersQuery.data?.map((center) => (
+                <button
+                  key={center.centerId}
+                  onClick={() => setSelectedCenterId(center.centerId)}
+                  className={`block w-full text-left px-3 py-2 rounded-md text-sm ${
+                    center.centerId === selectedCenterId
+                      ? "bg-blue-600 text-white"
+                      : "hover:bg-slate-100"
+                  }`}
+                >
+                  {center.centerName}
+                </button>
+              ))}
+            </section>
+
+            {/* Polling Places */}
+            <section className="bg-white rounded-xl shadow-sm border p-4">
+              <h3 className="text-sm font-semibold mb-2">Polling Places</h3>
+
+              {!selectedCenterId && (
+                <p className="text-xs text-slate-500">
+                  Select a polling center to view its places.
+                </p>
+              )}
+
+              {selectedCenterId && placesQuery.isLoading && (
+                <p className="text-xs text-slate-500">Loading places…</p>
+              )}
+
+              {selectedCenterId && placesQuery.isError && (
+                <p className="text-xs text-red-600">
+                  Error loading polling places. Check /api/polling-places.
+                </p>
+              )}
+
+              {selectedCenterId &&
+                !placesQuery.isLoading &&
+                !placesQuery.isError &&
+                placesQuery.data &&
+                placesQuery.data.length === 0 && (
                   <p className="text-xs text-slate-500">
-                    No polling centers found for this district.
+                    No polling places defined for this center.
                   </p>
                 )}
 
-              {selectedDistrictId &&
-                centersQuery.data &&
-                centersQuery.data.length > 0 && (
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="text-left border-b border-slate-200">
-                        <th className="py-2 pr-2 font-medium text-slate-600">
-                          Center Name
-                        </th>
-                        <th className="py-2 pr-2 font-medium text-slate-600">
-                          Code
-                        </th>
-                        <th className="py-2 pr-2 font-medium text-slate-600 text-right">
-                          Reg. Voters
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {centersQuery.data.map((center) => (
-                        <tr
-                          key={center.centerId}
-                          className="border-b border-slate-100 last:border-0"
-                        >
-                          <td className="py-1.5 pr-2 text-slate-800">
-                            {center.centerName}
-                          </td>
-                          <td className="py-1.5 pr-2 text-slate-500">
-                            {center.code}
-                          </td>
-                          <td className="py-1.5 pr-2 text-right text-slate-700">
-                            {center.registeredVoters}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+              {placesQuery.data?.map((place) => (
+                <div
+                  key={place.placeId}
+                  className="border-b last:border-b-0 py-1.5 text-sm"
+                >
+                  {place.placeNumber} — {place.label ?? place.code}
+                </div>
+              ))}
             </section>
           </div>
         </main>
@@ -303,208 +277,3 @@ const GeographyPage: React.FC = () => {
 };
 
 export default GeographyPage;
-
-
-
-
-// // src/pages/GeographyPage.tsx
-// // ------------------------------------------------------
-// // Geography & Centers view (first step: County → District).
-// //
-// // Uses:
-// //   useCounties()  -> /api/counties
-// //   useDistricts() -> /api/districts?countyId=...
-// // ------------------------------------------------------
-
-// import React, { useEffect, useState } from "react";
-// import { useNavigate } from "react-router-dom";
-// import { useAuthStore } from "../shared/store/authStore";
-// import { useCounties } from "../shared/hook/useCounties";
-// import { useDistricts } from "../shared/hook/useDistricts";
-
-// const GeographyPage: React.FC = () => {
-//   const navigate = useNavigate();
-//   const currentOrgId = useAuthStore((state) => state.currentOrgId);
-//   const clearAuth = useAuthStore((state) => state.clearAuth);
-
-//   const countiesQuery = useCounties();
-
-//   const [selectedCountyId, setSelectedCountyId] = useState<string | null>(null);
-
-//   const districtsQuery = useDistricts(selectedCountyId);
-
-//   // Auto-select first county when data is loaded
-//   useEffect(() => {
-//     if (
-//       countiesQuery.data &&
-//       countiesQuery.data.length > 0 &&
-//       !selectedCountyId
-//     ) {
-//       setSelectedCountyId(countiesQuery.data[0].countyId);
-//     }
-//   }, [countiesQuery.data, selectedCountyId]);
-
-//   const handleLogout = () => {
-//     clearAuth();
-//     navigate("/login");
-//   };
-
-//   return (
-//     <div className="min-h-screen flex bg-slate-100">
-//       {/* Sidebar: re-use same style as Dashboard for consistency */}
-//       <aside className="w-64 bg-slate-900 text-slate-50 flex flex-col">
-//         <div className="px-4 py-4 border-b border-slate-800">
-//           <h1 className="text-lg font-bold">Election Vote Tracker</h1>
-//           <p className="text-xs text-slate-400 mt-1">Geography &amp; Centers</p>
-//         </div>
-
-//         <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
-//           <button
-//             className="w-full text-left px-3 py-2 rounded-md hover:bg-slate-800/60"
-//             onClick={() => navigate("/dashboard")}
-//           >
-//             ← Back to Dashboard
-//           </button>
-//         </nav>
-
-//         <div className="px-4 py-3 border-t border-slate-800 text-xs text-slate-400">
-//           <p>Org ID:</p>
-//           <p className="font-mono break-all text-slate-300 text-[11px]">
-//             {currentOrgId ?? "N/A"}
-//           </p>
-//         </div>
-//       </aside>
-
-//       {/* Main content */}
-//       <div className="flex-1 flex flex-col">
-//         {/* Top bar */}
-//         <header className="h-14 px-6 flex items-center justify-between bg-white border-b border-slate-200">
-//           <div>
-//             <h2 className="text-lg font-semibold text-slate-900">
-//               Geography &amp; Centers
-//             </h2>
-//             <p className="text-xs text-slate-500">
-//               Explore counties and districts. Later this will drive center-level
-//               stats and allocations.
-//             </p>
-//           </div>
-
-//           <button
-//             onClick={handleLogout}
-//             className="text-xs px-3 py-1.5 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100"
-//           >
-//             Logout
-//           </button>
-//         </header>
-
-//         {/* Body */}
-//         <main className="flex-1 p-6">
-//           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//             {/* County selector */}
-//             <section className="lg:col-span-1 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-//               <h3 className="text-sm font-semibold text-slate-900 mb-2">
-//                 Counties
-//               </h3>
-
-//               {countiesQuery.isLoading ? (
-//                 <p className="text-xs text-slate-500">Loading counties…</p>
-//               ) : countiesQuery.isError ? (
-//                 <p className="text-xs text-red-600">
-//                   Error loading counties. Check API /api/counties.
-//                 </p>
-//               ) : countiesQuery.data && countiesQuery.data.length > 0 ? (
-//                 <ul className="space-y-1">
-//                   {countiesQuery.data.map((county) => {
-//                     const isActive = county.countyId === selectedCountyId;
-//                     return (
-//                       <li key={county.countyId}>
-//                         <button
-//                           type="button"
-//                           onClick={() => setSelectedCountyId(county.countyId)}
-//                           className={`w-full text-left px-3 py-2 rounded-md text-sm ${
-//                             isActive
-//                               ? "bg-blue-600 text-white"
-//                               : "hover:bg-slate-100"
-//                           }`}
-//                         >
-//                           {county.countyName}
-//                         </button>
-//                       </li>
-//                     );
-//                   })}
-//                 </ul>
-//               ) : (
-//                 <p className="text-xs text-slate-500">No counties defined.</p>
-//               )}
-//             </section>
-
-//             {/* District list */}
-//             <section className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-//               <h3 className="text-sm font-semibold text-slate-900 mb-2">
-//                 Districts
-//               </h3>
-
-//               {!selectedCountyId && (
-//                 <p className="text-xs text-slate-500">
-//                   Select a county on the left to view districts.
-//                 </p>
-//               )}
-
-//               {selectedCountyId && districtsQuery.isLoading && (
-//                 <p className="text-xs text-slate-500">Loading districts…</p>
-//               )}
-
-//               {selectedCountyId && districtsQuery.isError && (
-//                 <p className="text-xs text-red-600">
-//                   Error loading districts. Check API /api/districts.
-//                 </p>
-//               )}
-
-//               {selectedCountyId &&
-//                 districtsQuery.data &&
-//                 districtsQuery.data.length === 0 && (
-//                   <p className="text-xs text-slate-500">
-//                     No districts found for this county.
-//                   </p>
-//                 )}
-
-//               {selectedCountyId &&
-//                 districtsQuery.data &&
-//                 districtsQuery.data.length > 0 && (
-//                   <table className="w-full text-xs border-collapse">
-//                     <thead>
-//                       <tr className="text-left border-b border-slate-200">
-//                         <th className="py-2 pr-2 font-medium text-slate-600">
-//                           District Name
-//                         </th>
-//                         <th className="py-2 pr-2 font-medium text-slate-600">
-//                           County
-//                         </th>
-//                       </tr>
-//                     </thead>
-//                     <tbody>
-//                       {districtsQuery.data.map((d) => (
-//                         <tr
-//                           key={d.districtId}
-//                           className="border-b border-slate-100 last:border-0"
-//                         >
-//                           <td className="py-1.5 pr-2 text-slate-800">
-//                             {d.districtName}
-//                           </td>
-//                           <td className="py-1.5 pr-2 text-slate-500">
-//                             {d.countyName}
-//                           </td>
-//                         </tr>
-//                       ))}
-//                     </tbody>
-//                   </table>
-//                 )}
-//             </section>
-//           </div>
-//         </main>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default GeographyPage;

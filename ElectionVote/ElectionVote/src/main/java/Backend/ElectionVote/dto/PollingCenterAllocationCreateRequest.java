@@ -9,7 +9,7 @@ import java.util.UUID;
 @Getter @Setter
 public class PollingCenterAllocationCreateRequest {
     @NotNull private UUID electionId;
-    @NotNull private UUID pollingCenterId;
+    @NotNull private UUID centerId;
     @Min(0) private int registeredVoters;
     @Min(0) private Integer ballotsIssued; // optional
 }

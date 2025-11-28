@@ -138,7 +138,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             attachFilesToSubmission(org, saved, agent, files);
         }
         // --------- Audit log ---------
-        auditLogService.logCreate(
+        auditLogService.logSubmissionCreate(
                 org.getOrgId(),
                 agent.getUserId(),
                 "VoteSubmission",
@@ -185,7 +185,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         Map<UUID, Integer> mergedVotes =
                 (req.getCandidateVotes() != null)
                         ? req.getCandidateVotes()
-                        : readVotes(s.getCandidateVotes());
+                        : (s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap());
 
         int cast    = (req.getBallotsCast()    != null) ? req.getBallotsCast()    : s.getBallotsCast();
         int invalid = (req.getInvalidBallots() != null) ? req.getInvalidBallots() : s.getInvalidBallots();
@@ -245,7 +245,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         }
 
         // Audit Log Activity
-        auditLogService.logUpdate(
+        auditLogService.logSubmissionUpdate(
                 s.getOrganization().getOrgId(),
                 s.getAgent().getUserId(),
                 "VoteSubmission",
@@ -336,7 +336,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                 );
 
                 // Audit Log Activity
-                auditLogService.logVerify(
+                auditLogService.logSubmissionVerify(
                         saved.getOrganization().getOrgId(),
                         verifier.getUserId(),
                         "VoteSubmission",
@@ -357,7 +357,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             }
 
             // Audit Log Activity
-            auditLogService.logReject(
+            auditLogService.logSubmissionReject(
                     saved.getOrganization().getOrgId(),
                     verifier.getUserId(),
                     "VoteSubmission",
@@ -459,14 +459,42 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                                               UUID centerId,
                                               UUID placeId,
                                               UUID agentId,
-                                              String votesJson,
+                                              Map<UUID, Integer> votesMap,
                                               int cast,
                                               int invalid,
                                               int blank,
                                               int rejected,
                                               int spoiled) {
-        String payload = orgId + "|" + electionId + "|" + centerId + "|" + placeId + "|" + agentId + "|" +
-                votesJson + "|" + cast + "|" + invalid + "|" + blank + "|" + rejected + "|" + spoiled;
+
+        // ---- Convert Map<UUID,Integer> → sorted JSON string ----
+        String votesJson;
+        try {
+            // Convert UUID keys to Strings + sort for stable hashing
+            Map<String, Integer> sorted = new TreeMap<>();
+            if (votesMap != null) {
+                votesMap.forEach((uuid, value) -> sorted.put(uuid.toString(), value));
+            }
+
+            ObjectMapper mapper = new ObjectMapper();
+            votesJson = mapper.writeValueAsString(sorted);   // e.g. {"uuid1":100,"uuid2":200}
+        } catch (Exception ex) {
+            votesJson = "{}"; // safe fallback
+        }
+
+        // ---- Build raw payload identical to original structure ----
+        String payload = orgId + "|" +
+                electionId + "|" +
+                centerId + "|" +
+                placeId + "|" +
+                agentId + "|" +
+                votesJson + "|" +
+                cast + "|" +
+                invalid + "|" +
+                blank + "|" +
+                rejected + "|" +
+                spoiled;
+
+        // ---- SHA-256 hash (same output format as before) ----
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(md.digest(payload.getBytes(StandardCharsets.UTF_8)));
@@ -474,6 +502,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             throw new IllegalStateException("SHA-256 unavailable", ex);
         }
     }
+
 
 
 
@@ -510,7 +539,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             }
 
             // Audit Log Activity
-            auditLogService.logUpload(
+            auditLogService.logTallyUpload(
                     org.getOrgId(),
                     uploadedBy.getUserId(),
                     "TallySheet",

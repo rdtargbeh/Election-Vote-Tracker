@@ -10,6 +10,7 @@ import org.springframework.data.domain.*;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -23,21 +24,30 @@ public class ElectionCandidateController {
 
     @PostMapping
     public ElectionCandidateDto create(@Valid @RequestBody ElectionCandidateCreateRequest req) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         return electionCandidateService.create(req);
     }
 
     @PutMapping("/{id}")
     public ElectionCandidateDto update(@PathVariable UUID id, @RequestBody ElectionCandidateUpdateRequest req) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         return electionCandidateService.update(id, req);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
-        authz.requireAny("PARTY_ADMIN", "ADMIN", "SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
         electionCandidateService.delete(id);
     }
+
+    @GetMapping("/{electionId}/candidates")
+    public List<ElectionCandidateDto> listByElection(
+            @PathVariable UUID electionId
+    ) {
+        // If you want, you can add authz.requirePlatformAdmin() or tenant rules here.
+        return electionCandidateService.listByElection(electionId);
+    }
+
 
     @GetMapping("/{id}")
     public ElectionCandidateDto get(@PathVariable UUID id) {

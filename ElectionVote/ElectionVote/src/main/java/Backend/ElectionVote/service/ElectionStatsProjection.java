@@ -15,4 +15,7 @@ public interface ElectionStatsProjection {
 
     BigDecimal getTurnoutPct();
     BigDecimal getInvalidPct();
+
+
+
 }

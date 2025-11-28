@@ -1,5 +1,6 @@
 package Backend.ElectionVote.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -9,6 +10,7 @@ import java.util.UUID;
 public class ElectionPartyAssignRequest {
 
     @NotNull
+//    @JsonIgnore
     private UUID electionId;
 
     @NotNull

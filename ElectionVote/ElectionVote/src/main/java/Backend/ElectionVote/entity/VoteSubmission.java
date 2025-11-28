@@ -3,10 +3,13 @@ package Backend.ElectionVote.entity;
 import Backend.ElectionVote.enums.VoteStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
 
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Getter
@@ -49,23 +52,24 @@ public class VoteSubmission extends AuditBaseEntity {
     @Column(name = "submission_time")
     private LocalDateTime submissionTime = LocalDateTime.now();
 
-    @Column(name = "candidate_votes", columnDefinition = "jsonb", nullable = false)
-    private String candidateVotes;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "candidate_votes", nullable = false)
+    private Map<UUID, Integer> candidateVotes;
+
 
     @Column(name = "ballots_cast", nullable = false)
     private Integer ballotsCast;
-
     @Column(name = "invalid_ballots", nullable = false)
     private Integer invalidBallots = 0;
-
     @Column(name = "blank_ballots", nullable = false)
     private Integer blankBallots = 0;
-
     @Column(name = "rejected_ballots", nullable = false)
     private Integer rejectedBallots = 0;
-
     @Column(name = "spoiled_ballots", nullable = false)
     private Integer spoiledBallots = 0;
+    @Column(name = "discrepency")
+    private Integer discrepency = 0;
+
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
