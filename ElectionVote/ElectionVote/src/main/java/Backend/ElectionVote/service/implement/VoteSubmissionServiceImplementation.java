@@ -300,8 +300,11 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
 
     // ----------------- VERIFY (unchanged notifications) -----------------
+    // ----------------- VERIFY -----------------
     @Override
+    @Transactional
     public VoteSubmissionDto verify(UUID id, VoteSubmissionVerifyRequest req) {
+
         VoteSubmission s = voteSubmissionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
 
@@ -312,10 +315,13 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             throw new ResponseStatusException(BAD_REQUEST, "Submission already processed");
         }
 
-        s.setStatus(req.getAccept() ? VoteStatus.VERIFIED : VoteStatus.REJECTED);
+        // decide new status
+        boolean accept = Boolean.TRUE.equals(req.getAccept());
+        s.setStatus(accept ? VoteStatus.VERIFIED : VoteStatus.REJECTED);
         s.setVerifiedBy(verifier);
         s.setDateVerified(LocalDateTime.now());
 
+        // append review comment to existing comments
         if (req.getComment() != null && !req.getComment().isBlank()) {
             String prefix = (s.getComments() == null ? "" : s.getComments() + "\n");
             s.setComments(prefix + "[review] " + req.getComment());
@@ -325,7 +331,11 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             VoteSubmission saved = voteSubmissionRepository.save(s);
 
             if (saved.getStatus() == VoteStatus.VERIFIED) {
+
+                // 1) explode candidate_votes JSON into vote_detail rows
                 voteDetailService.resyncFromSubmission(saved.getSubmissionId());
+
+                // 2) notify agent
                 notify(
                         saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
                         NotificationType.VOTE,
@@ -335,7 +345,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                         NotificationPriority.NORMAL, DeliveryMethod.IN_APP
                 );
 
-                // Audit Log Activity
+                // 3) audit log: VERIFIED
                 auditLogService.logSubmissionVerify(
                         saved.getOrganization().getOrgId(),
                         verifier.getUserId(),
@@ -344,34 +354,122 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                 );
 
             } else {
+                // REJECTED branch
+
+                // 1) remove any existing vote_detail rows for this submission
                 voteDetailRepository.deleteBySubmissionId(saved.getSubmissionId());
+
+                // 2) notify agent
+                String message = "Your submission at " + saved.getPollingCenter().getCenterName() + " was rejected.";
+                if (req.getComment() != null && !req.getComment().isBlank()) {
+                    message += " Reason: " + req.getComment();
+                }
+
                 notify(
                         saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
                         NotificationType.VOTE,
                         "Submission Rejected",
-                        "Your submission at " + saved.getPollingCenter().getCenterName() + " was rejected."
-                                + (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : ""),
+                        message,
                         "vote_submission", saved.getSubmissionId(),
                         NotificationPriority.NORMAL, DeliveryMethod.IN_APP
                 );
-            }
 
-            // Audit Log Activity
-            auditLogService.logSubmissionReject(
-                    saved.getOrganization().getOrgId(),
-                    verifier.getUserId(),
-                    "VoteSubmission",
-                    "Rejected submission: " + saved.getSubmissionId() +
-                            (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : "")
-            );
+                // 3) audit log: REJECTED
+                auditLogService.logSubmissionReject(
+                        saved.getOrganization().getOrgId(),
+                        verifier.getUserId(),
+                        "VoteSubmission",
+                        "Rejected submission: " + saved.getSubmissionId() +
+                                (req.getComment() != null && !req.getComment().isBlank()
+                                        ? " Reason: " + req.getComment()
+                                        : "")
+                );
+            }
 
             return mapper.toDTO(saved);
 
         } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-            throw new ResponseStatusException(CONFLICT,
-                    "A verified submission already exists for this organization, election, and center");
+            // Adjust this message if your unique index is now org + election + place instead of center
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "A verified submission already exists for this organization, election, and polling location"
+            );
         }
     }
+
+
+//    @Override
+//    public VoteSubmissionDto verify(UUID id, VoteSubmissionVerifyRequest req) {
+//        VoteSubmission s = voteSubmissionRepository.findById(id)
+//                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
+//
+//        SystemUser verifier = userRepo.findById(req.getVerifierUserId())
+//                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Verifier not found"));
+//
+//        if (s.getStatus() != VoteStatus.PENDING) {
+//            throw new ResponseStatusException(BAD_REQUEST, "Submission already processed");
+//        }
+//
+//        s.setStatus(req.getAccept() ? VoteStatus.VERIFIED : VoteStatus.REJECTED);
+//        s.setVerifiedBy(verifier);
+//        s.setDateVerified(LocalDateTime.now());
+//
+//        if (req.getComment() != null && !req.getComment().isBlank()) {
+//            String prefix = (s.getComments() == null ? "" : s.getComments() + "\n");
+//            s.setComments(prefix + "[review] " + req.getComment());
+//        }
+//
+//        try {
+//            VoteSubmission saved = voteSubmissionRepository.save(s);
+//
+//            if (saved.getStatus() == VoteStatus.VERIFIED) {
+//                voteDetailService.resyncFromSubmission(saved.getSubmissionId());
+//                notify(
+//                        saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+//                        NotificationType.VOTE,
+//                        "Submission Verified",
+//                        "Your submission at " + saved.getPollingCenter().getCenterName() + " was verified.",
+//                        "vote_submission", saved.getSubmissionId(),
+//                        NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+//                );
+//
+//                // Audit Log Activity
+//                auditLogService.logSubmissionVerify(
+//                        saved.getOrganization().getOrgId(),
+//                        verifier.getUserId(),
+//                        "VoteSubmission",
+//                        "Verified submission: " + saved.getSubmissionId()
+//                );
+//
+//            } else {
+//                voteDetailRepository.deleteBySubmissionId(saved.getSubmissionId());
+//                notify(
+//                        saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+//                        NotificationType.VOTE,
+//                        "Submission Rejected",
+//                        "Your submission at " + saved.getPollingCenter().getCenterName() + " was rejected."
+//                                + (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : ""),
+//                        "vote_submission", saved.getSubmissionId(),
+//                        NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+//                );
+//            }
+//
+//            // Audit Log Activity
+//            auditLogService.logSubmissionReject(
+//                    saved.getOrganization().getOrgId(),
+//                    verifier.getUserId(),
+//                    "VoteSubmission",
+//                    "Rejected submission: " + saved.getSubmissionId() +
+//                            (req.getComment()!=null && !req.getComment().isBlank()? " Reason: "+req.getComment() : "")
+//            );
+//
+//            return mapper.toDTO(saved);
+//
+//        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+//            throw new ResponseStatusException(CONFLICT,
+//                    "A verified submission already exists for this organization, election, and center");
+//        }
+//    }
 
 
 

@@ -47,7 +47,6 @@ public class VoteSubmissionDto {
     private Integer blankBallots;
     private Integer rejectedBallots;
     private Integer spoiledBallots;
-    private Integer discrepency ;
 
     private VoteStatus status;
     private String comments;

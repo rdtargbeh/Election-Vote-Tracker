@@ -39,8 +39,6 @@ public class VoteSubmissionController {
     public VoteSubmissionDto createFromJson(
             @RequestBody @Valid VoteSubmissionCreateRequest req
     ) {
-        // you already have this service:
-        // public VoteSubmissionDto create(VoteSubmissionCreateRequest req)
         return voteSubmissionService.create(req);
     }
 
@@ -70,8 +68,8 @@ public class VoteSubmissionController {
                 : voteSubmissionService.update(id, req);
     }
 
-    @PostMapping("/{id}/review")
-    public VoteSubmissionDto review(@PathVariable UUID id,
+    @PostMapping("/{id}/verify")
+    public VoteSubmissionDto verify(@PathVariable UUID id,
                                     @Valid @RequestBody VoteSubmissionVerifyRequest req) {
         return voteSubmissionService.verify(id, req);
     }
@@ -81,8 +79,10 @@ public class VoteSubmissionController {
         return voteSubmissionService.get(id);
     }
 
+
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) { voteSubmissionService.delete(id); }
+
 
     @GetMapping
     public Page<VoteSubmissionDto> search(

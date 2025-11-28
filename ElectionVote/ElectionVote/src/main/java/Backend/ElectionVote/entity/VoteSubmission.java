@@ -67,9 +67,6 @@ public class VoteSubmission extends AuditBaseEntity {
     private Integer rejectedBallots = 0;
     @Column(name = "spoiled_ballots", nullable = false)
     private Integer spoiledBallots = 0;
-    @Column(name = "discrepency")
-    private Integer discrepency = 0;
-
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)

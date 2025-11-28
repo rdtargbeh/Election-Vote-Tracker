@@ -84,7 +84,8 @@ public class Notification {
     private LocalDateTime dateExpires;
 
     /** Priority: LOW, NORMAL, HIGH, CRITICAL */
-    @Column(name = "priority", length = 20)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false, length = 20)
     private NotificationPriority priority = NotificationPriority.NORMAL;
 
     @Enumerated(EnumType.STRING)

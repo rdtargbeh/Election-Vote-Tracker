@@ -12,5 +12,3 @@ public class ElectionVoteApplication {
 
 }
 
-
-// romelt22   pass:    @Romelt2024

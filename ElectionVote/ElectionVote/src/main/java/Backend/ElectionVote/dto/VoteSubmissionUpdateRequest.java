@@ -15,7 +15,6 @@ public class VoteSubmissionUpdateRequest {
     private Integer blankBallots;
     private Integer rejectedBallots;
     private Integer spoiledBallots;
-    private Integer discrepency ;
     private String comments;
     private Double latitude, longitude;
 }

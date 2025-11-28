@@ -5,20 +5,16 @@ import Backend.ElectionVote.dto.VoteSubmissionDto;
 import Backend.ElectionVote.dto.VoteSubmissionUpdateRequest;
 import Backend.ElectionVote.entity.*;
 import Backend.ElectionVote.enums.VoteStatus;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
-
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 
 @Component
@@ -113,7 +109,6 @@ public class VoteSubmissionMapper {
                 .blankBallots(s.getBlankBallots())
                 .rejectedBallots(s.getRejectedBallots())
                 .spoiledBallots(s.getSpoiledBallots())
-                .discrepency(s.getDiscrepency())
                 .status(s.getStatus())
                 .comments(s.getComments())
 
@@ -154,7 +149,6 @@ public class VoteSubmissionMapper {
         s.setBlankBallots(nz(req.getBlankBallots()));
         s.setRejectedBallots(nz(req.getRejectedBallots()));
         s.setSpoiledBallots(nz(req.getSpoiledBallots()));
-        s.setDiscrepency(req.getDiscrepency());
 
         s.setStatus(VoteStatus.PENDING);
         s.setComments(req.getComments());
@@ -190,9 +184,6 @@ public class VoteSubmissionMapper {
 
         if (req.getSpoiledBallots() != null)
             s.setSpoiledBallots(req.getSpoiledBallots());
-
-        if (req.getDiscrepency() != null)
-            s.setDiscrepency(req.getDiscrepency());
 
         if (req.getComments() != null)
             s.setComments(req.getComments());

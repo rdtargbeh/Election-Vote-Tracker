@@ -25,7 +25,6 @@ public class VoteSubmissionCreateRequest {
     @Min(0) private Integer blankBallots = 0;
     @Min(0) private Integer rejectedBallots = 0;
     @Min(0) private Integer spoiledBallots = 0;
-    @Min(0) private Integer discrepency = 0;
 
     private String comments;
 
