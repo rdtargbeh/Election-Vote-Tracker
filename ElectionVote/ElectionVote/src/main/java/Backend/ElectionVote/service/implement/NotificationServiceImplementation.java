@@ -1,0 +1,194 @@
+package Backend.ElectionVote.service.implement;
+
+import Backend.ElectionVote.dto.NotificationCreateRequest;
+import Backend.ElectionVote.dto.NotificationDto;
+import Backend.ElectionVote.entity.ChatRoomMember;
+import Backend.ElectionVote.entity.Notification;
+import Backend.ElectionVote.entity.Organization;
+import Backend.ElectionVote.entity.SystemUser;
+import Backend.ElectionVote.enums.DeliveryMethod;
+import Backend.ElectionVote.enums.NotificationPriority;
+import Backend.ElectionVote.enums.NotificationType;
+import Backend.ElectionVote.mapper.NotificationMapper;
+import Backend.ElectionVote.repository.ChatRoomMemberRepository;
+import Backend.ElectionVote.repository.NotificationRepository;
+import Backend.ElectionVote.repository.OrganizationRepository;
+import Backend.ElectionVote.repository.SystemUserRepository;
+import Backend.ElectionVote.service.NotificationSender;
+import Backend.ElectionVote.service.NotificationService;
+import Backend.ElectionVote.utility.NotificationSpecs;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.*;
+
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class NotificationServiceImplementation implements NotificationService {
+
+    private final NotificationRepository notificationRepository;
+    private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final OrganizationRepository orgRepo;
+    private final SystemUserRepository userRepo;
+    private final NotificationSender sender;
+
+    private final NotificationMapper mapper = new NotificationMapper();
+
+
+
+    @Override
+    public List<NotificationDto> publish(NotificationCreateRequest req) {
+        // Load principals
+        Organization org = orgRepo.findById(req.getOrgId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found"));
+        SystemUser target = userRepo.findById(req.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        SystemUser creator = null;
+        if (req.getCreatedBy() != null) {
+            creator = userRepo.findById(req.getCreatedBy())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Creator not found"));
+        }
+
+        // Normalize channels: if absent, use single deliveryMethod or default IN_APP
+        Set<DeliveryMethod> channels = (req.getChannels() != null && !req.getChannels().isEmpty())
+                ? EnumSet.copyOf(req.getChannels())
+                : EnumSet.of(req.getDeliveryMethod() != null ? req.getDeliveryMethod() : DeliveryMethod.IN_APP);
+
+        // Idempotency (optional, only if key provided): return existing IN_APP copy if already stored
+        if (req.getIdempotencyKey() != null && !req.getIdempotencyKey().isBlank()) {
+            Optional<Notification> existing = notificationRepository.findByIdempotencyKey(req.getIdempotencyKey());
+            if (existing.isPresent()) {
+                // Still send transport for non-IN_APP channels if you want "at-least-once" transport.
+                // Here we skip transport if idempotent hit is found.
+                return List.of(mapper.toDTO(existing.get()));
+            }
+        }
+
+        List<NotificationDto> out = new ArrayList<>(channels.size());
+
+        for (DeliveryMethod method : channels) {
+            Notification n = Notification.builder()
+                    .organization(org)
+                    .user(target)
+                    .type(req.getType())
+                    .title(req.getTitle())
+                    .message(req.getMessage())
+                    .relatedTable(req.getRelatedTable())
+                    .relatedId(req.getRelatedId())
+                    .priority(req.getPriority() != null ? req.getPriority() : NotificationPriority.NORMAL)
+                    .deliveryMethod(method)
+                    .dateExpires(req.getDateExpires())
+                    .createdBy(creator)
+                    .idempotencyKey(req.getIdempotencyKey())
+                    .build();
+
+            Notification saved = notificationRepository.save(n);
+
+            // Dispatch side-effects
+            try {
+                sender.send(method, target, saved.getTitle(),
+                        Optional.ofNullable(saved.getMessage()).orElse(saved.getTitle()));
+            } catch (Exception ex) {
+                // transport failed => keep the persisted IN_APP record; optionally log/alert/retry
+                // You can add a retry table/queue here if needed.
+                // log.error("Notification transport failed", ex);
+            }
+
+            out.add(mapper.toDTO(saved));
+        }
+
+        return out;
+    }
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<NotificationDto> search(UUID orgId, UUID userId,
+                                        NotificationType type, DeliveryMethod method, Boolean unread,
+                                        Pageable pageable) {
+        Specification<Notification> spec = Specification
+                .where(NotificationSpecs.orgEquals(orgId))
+                .and(NotificationSpecs.userEquals(userId))
+                .and(NotificationSpecs.typeEquals(type))
+                .and(NotificationSpecs.methodEquals(method))
+                .and(NotificationSpecs.unread(unread));
+
+        return notificationRepository.findAll(spec, pageable).map(mapper::toDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long unreadCount(UUID userId) {
+        return notificationRepository.countUnread(userId);
+    }
+
+    @Override
+    public int markRead(UUID userId, List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return 0;
+        return notificationRepository.markRead(userId, ids);
+    }
+
+
+
+    @Override
+    public int markSeen(UUID userId, List<UUID> ids) {
+        if (ids == null || ids.isEmpty()) return 0;
+        return notificationRepository.markSeen(userId, ids);
+    }
+
+    @Override
+    @Transactional
+    public Notification send(Organization org,
+                             SystemUser recipient,
+                             String type,
+                             String title,
+                             String message,
+                             String relatedTable,
+                             UUID relatedId) {
+
+        Notification n = Notification.builder()
+                .organization(org)
+                .user(recipient)
+                .type(NotificationType.valueOf(type))
+                .title(title)
+                .message(message)
+                .relatedTable(relatedTable)
+                .relatedId(relatedId)
+                .deliveryMethod(DeliveryMethod.valueOf("IN_APP"))
+                .priority(NotificationPriority.valueOf("NORMAL"))
+                .build();
+
+        return notificationRepository.save(n);
+    }
+
+    @Override
+    @Transactional
+    public void notifyRoomMembersOnNewMessage(UUID roomId,
+                                              UUID senderUserId,
+                                              Organization org,
+                                              String roomDisplayName,
+                                              UUID messageId) {
+
+        // Fetch enabled, non-muted members of the room (excluding sender)
+        List<SystemUser> recipients = chatRoomMemberRepository
+                .findAllByRoom_RoomIdAndIsEnabledTrueAndMutedFalseAndUser_UserIdNot(roomId, senderUserId)
+                .stream()
+                .map(ChatRoomMember::getUser)
+                .distinct()
+                .toList();
+
+        String title = "New Message";
+        String msg = "New message in " + (roomDisplayName != null ? roomDisplayName : "this room");
+
+        for (SystemUser u : recipients) {
+            send(org, u, "CHAT", title, msg, "chat_message", messageId);
+        }
+    }
+}

@@ -1,0 +1,17 @@
+package Backend.ElectionVote.utility;
+
+
+import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Getter
+@Setter
+public class ChatRoomMemberSeenRequest {
+    @NotNull
+    private LocalDateTime seenAt;         // client UTC ISO
+    private UUID lastSeenMessageId;                // optional
+}
