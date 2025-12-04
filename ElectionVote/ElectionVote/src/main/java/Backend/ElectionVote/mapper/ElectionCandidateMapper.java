@@ -4,27 +4,59 @@ import Backend.ElectionVote.dto.ElectionCandidateCreateRequest;
 import Backend.ElectionVote.dto.ElectionCandidateDto;
 import Backend.ElectionVote.dto.ElectionCandidateUpdateRequest;
 
-import Backend.ElectionVote.entity.Candidate;
-import Backend.ElectionVote.entity.Election;
-import Backend.ElectionVote.entity.ElectionCandidate;
-import Backend.ElectionVote.entity.PollingCenter;
+import Backend.ElectionVote.entity.*;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ElectionCandidateMapper {
 
+
     public ElectionCandidateDto toDTO(ElectionCandidate ec) {
         if (ec == null) return null;
+
+        Candidate c = ec.getCandidate();
+        Party p = (c != null) ? c.getParty() : null;
+        Election e = ec.getElection();
+        PollingCenter pc = ec.getPollingCenter();
+
         return ElectionCandidateDto.builder()
                 .electId(ec.getElectId())
-                .electionId(ec.getElection() != null ? ec.getElection().getElectionId() : null)
-                .electionName(ec.getElection() != null ? ec.getElection().getElectionName() : null)
-                .candidateId(ec.getCandidate() != null ? ec.getCandidate().getCandidateId() : null)
-                .fullName(ec.getCandidate() != null ? ec.getCandidate().getFullName() : null)
-                .centerId(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterId() : null)
-                .centerName(ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterName() : null)
+                .electionId(e != null ? e.getElectionId() : null)
+                .electionName(e != null ? e.getElectionName() : null)
+                .centerId(pc != null ? pc.getCenterId() : null)
+                .centerName(pc != null ? pc.getCenterName() : null)
+                .candidateId(c != null ? c.getCandidateId() : null)
+                .fullName(c != null ? c.getFullName() : null)
+                .partyId(p != null ? p.getPartyId() : null)
+                .partyAbbrev(p != null ? p.getAbbreviation() : null)
+                .dateCreated(ec.getDateCreated())
+                .dateUpdated(ec.getDateUpdated())
+
                 .build();
     }
+//
+//    public ElectionCandidateDto toDTO(ElectionCandidate ec) {
+//        if (ec == null) return null;
+//
+//        Candidate c = ec.getCandidate();
+//        Party p = (c != null) ? c.getParty() : null;
+//
+//        return ElectionCandidateDto.builder()
+//                .electId(ec.getElectId())
+//                .electionId(
+//                        ec.getElection() != null ? ec.getElection().getElectionId() : null
+//                )
+//                .centerId(
+//                        ec.getPollingCenter() != null ? ec.getPollingCenter().getCenterId() : null
+//                )
+//                .candidateId(c != null ? c.getCandidateId() : null)
+//                .fullName(c != null ? c.getFullName() : null)
+//                .partyId(p != null ? p.getPartyId() : null)
+//                .partyAbbrev(p != null ? p.getAbbreviation() : null)  // <<< here
+//                .build();
+//    }
+
+
 
     public ElectionCandidate toEntity(
             ElectionCandidateCreateRequest req,

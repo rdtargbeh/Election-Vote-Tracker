@@ -32,6 +32,7 @@ public class PlatformAdminController {
     @PostMapping("/organizations")
     @ResponseStatus(HttpStatus.CREATED)
     public OrganizationDto createOrganization(@RequestBody @Valid OrganizationCreateRequest req) {
+//        authz.requireNecAdminOrPlatformAdmin(); // NEC_ADMIN or SYSTEM_ADMIN
         authz.requirePlatformAdmin(); // uses TenantContext / token to ensure SYSTEM_ADMIN
         return organizationService.create(req);
     }

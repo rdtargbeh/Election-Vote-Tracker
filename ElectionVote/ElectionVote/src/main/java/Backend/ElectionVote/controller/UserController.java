@@ -8,6 +8,7 @@ import Backend.ElectionVote.service.SystemUserService;
 import Backend.ElectionVote.utility.AssignCountyRoleRequest;
 import Backend.ElectionVote.utility.ChangePasswordRequest;
 import Backend.ElectionVote.utility.UserSearchRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -19,6 +20,8 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -175,4 +178,55 @@ public class UserController {
 
     /** Pass {"id":"<uuid>"} or {} / null to clear (for party/county/default-org). */
     public record AssignIdRequest(UUID id) {}
+
+
+    // ----------------- Add this method -----------------
+    /**
+     * Return the current authenticated user (tenant-scoped).
+     * Client MUST include X-Org-Id header for tenant-scoped requests.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<UserDto> getCurrentUser(
+            @RequestHeader(name = "X-Org-Id", required = true) UUID orgId,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // 1) If principal is Jwt and contains a UUID claim -> try load by UUID (tenant-aware)
+        Object principal = authentication.getPrincipal();
+        UUID userId = null;
+        if (principal instanceof Jwt jwt) {
+            // prefer UUID claims
+            Object claim = jwt.getClaim("userId");
+            if (claim == null) claim = jwt.getClaim("user_id");
+            if (claim == null) claim = jwt.getClaim("id");
+            if (claim == null) claim = jwt.getSubject();
+            if (claim instanceof String) {
+                try {
+                    userId = UUID.fromString((String) claim);
+                } catch (IllegalArgumentException ignored) {
+                    userId = null;
+                }
+            }
+        }
+
+        // 2) If we obtained a UUID, return user by id (tenant-scoped)
+        if (userId != null) {
+            Optional<UserDto> dto = systemUserService.getInTenant(userId, orgId);
+            return dto.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        }
+
+        // 3) Fallback: use authentication.getName() (username) and lookup by orgId
+        String username = authentication.getName();
+        if (username != null && !username.isBlank()) {
+            Optional<UserDto> dto = systemUserService.getByUsernameInTenant(username, orgId);
+            return dto.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        }
+
+        // 4) Could not resolve user
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+    }
 }

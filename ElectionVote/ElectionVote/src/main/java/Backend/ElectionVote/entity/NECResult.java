@@ -70,6 +70,11 @@ public class NECResult {
     @Column(name = "upload_time")
     private LocalDateTime uploadTime = LocalDateTime.now();
 
+    @Column(name = "is_published", nullable = false)
+    private boolean isPublished = false;
+
+    @Column(name = "published_at")
+    private LocalDateTime publishedAt;
 
     @PrePersist
     public void prePersist() {

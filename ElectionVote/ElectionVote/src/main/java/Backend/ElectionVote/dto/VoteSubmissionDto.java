@@ -71,4 +71,10 @@ public class VoteSubmissionDto {
     private Double turnoutPct;     // ballotsCast / registeredVoters * 100
     private Double invalidPct;     // invalidTotal / ballotsCast * 100
 
+    private UUID submissionSignerKeyId;
+    private String submissionSignature;
+    private String chainHash;
+    private Long optimisticLock;
+    private String idempotencyKey;
+
 }

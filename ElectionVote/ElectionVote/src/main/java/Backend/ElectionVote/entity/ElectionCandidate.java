@@ -1,9 +1,13 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.security.BaseAuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 
@@ -23,7 +27,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ElectionCandidate {
+public class ElectionCandidate extends BaseAuditedEntity {
 
     @Id
     @GeneratedValue
@@ -45,4 +49,12 @@ public class ElectionCandidate {
     @JoinColumn(name = "polling_center_id",
             foreignKey = @ForeignKey(name = "fk_ec_center"))
     private PollingCenter pollingCenter; // nullable = nationwide or district-scoped via null
+
+    @CreationTimestamp
+    @Column(name = "date_created", nullable = false, updatable = false)
+    private LocalDateTime dateCreated;
+
+    @UpdateTimestamp
+    @Column(name = "date_updated")
+    private LocalDateTime dateUpdated;
 }

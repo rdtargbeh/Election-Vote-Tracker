@@ -83,4 +83,17 @@ public interface SystemUserService {
     /** Set/clear default organization used by multi-tenant UX (pass null to clear; typically defaults to current org). */
     void setDefaultOrgInTenant(UUID userId, UUID orgId);
 
+
+    // New
+    /**
+     * Return user by username within the given tenant (orgId).
+     */
+    Optional<UserDto> getByUsernameInTenant(String username, UUID orgId);
+
+    /**
+     * Return user by UUID within the given tenant (orgId).
+     */
+    Optional<UserDto> getInTenant(UUID id, UUID orgId);
+
+
 }

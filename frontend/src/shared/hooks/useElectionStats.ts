@@ -1,7 +1,8 @@
 // src/shared/hooks/useElectionStats.ts
 // ------------------------------------------------------
-// React Query hook to load summary stats for a given
-// orgId + electionId.
+// React Query hook to load org + election summary stats.
+// Uses canonical types from src/shared/types/api.ts and
+// returns typed ApiError on failure.
 //
 // Backend endpoint:
 //   GET /api/elections/org-election/stats?orgId=<UUID>&electionId=<UUID>
@@ -9,40 +10,24 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../lib/apiClient";
-
-export interface ElectionStatsDto {
-  orgId: string;
-  electionId: string;
-
-  registeredVoters: number;
-  ballotsCast: number;
-  validVotes: number;
-  invalidTotal: number;
-
-  turnoutPct: number | null;
-  invalidPct: number | null;
-}
+import type { ElectionStatsDto, ApiError } from "../types/api";
 
 export function useElectionStats(
   orgId: string | null,
   electionId: string | null
 ) {
-  return useQuery<ElectionStatsDto, Error>({
+  return useQuery<ElectionStatsDto, ApiError>({
     queryKey: ["election-stats", orgId, electionId],
-    enabled: !!orgId && !!electionId, // 🔒 only fire when both are set
-    retry: false, // 🔒 don't keep retrying on 500
+    enabled: !!orgId && !!electionId,
+    retry: false,
     queryFn: async () => {
       if (!orgId || !electionId) {
         throw new Error("orgId and electionId are required");
       }
-
       const res = await apiClient.get<ElectionStatsDto>(
         "/elections/org-election/stats",
-        {
-          params: { orgId, electionId },
-        }
+        { params: { orgId, electionId } }
       );
-
       return res.data;
     },
     staleTime: 60_000, // 1 minute caching
@@ -52,10 +37,10 @@ export function useElectionStats(
 // // src/shared/hooks/useElectionStats.ts
 // // ------------------------------------------------------
 // // React Query hook to load summary stats for a given
-// // electionId, using the statsService wrapper.
+// // orgId + electionId.
 // //
-// // Backend endpoint (expected):
-// //   GET /api/stats/election-summary?electionId=<UUID>
+// // Backend endpoint:
+// //   GET /api/elections/org-election/stats?orgId=<UUID>&electionId=<UUID>
 // // ------------------------------------------------------
 
 // import { useQuery } from "@tanstack/react-query";
@@ -74,19 +59,25 @@ export function useElectionStats(
 //   invalidPct: number | null;
 // }
 
-// export function useElectionStats(orgId: string | null, electionId: string | null) {
-//   return useQuery<ElectionStatsDto>({
+// export function useElectionStats(
+//   orgId: string | null,
+//   electionId: string | null
+// ) {
+//   return useQuery<ElectionStatsDto, Error>({
 //     queryKey: ["election-stats", orgId, electionId],
-//     enabled: !!orgId && !!electionId,
-
+//     enabled: !!orgId && !!electionId, // 🔒 only fire when both are set
+//     retry: false, // 🔒 don't keep retrying on 500
 //     queryFn: async () => {
 //       if (!orgId || !electionId) {
 //         throw new Error("orgId and electionId are required");
 //       }
 
-//       const res = await apiClient.get<ElectionStatsDto>("/elections/org-election/stats", {
-//         params: { orgId, electionId },
-//       });
+//       const res = await apiClient.get<ElectionStatsDto>(
+//         "/elections/org-election/stats",
+//         {
+//           params: { orgId, electionId },
+//         }
+//       );
 
 //       return res.data;
 //     },

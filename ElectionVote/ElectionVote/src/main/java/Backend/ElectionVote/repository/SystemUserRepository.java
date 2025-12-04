@@ -67,4 +67,10 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
 
 
 
+    @Query("select u from SystemUser u where u.userId = :id and u.defaultOrg.orgId = :orgId")
+    Optional<SystemUser> findByIdAndOrgId(@Param("id") UUID id, @Param("orgId") UUID orgId);
+
+    @Query("select u from SystemUser u where lower(u.userName) = lower(:username) and u.defaultOrg.orgId = :orgId")
+    Optional<SystemUser> findByUsernameAndOrgId(@Param("username") String username, @Param("orgId") UUID orgId);
+
 }

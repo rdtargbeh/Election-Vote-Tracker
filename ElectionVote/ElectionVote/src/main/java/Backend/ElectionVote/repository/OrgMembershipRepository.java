@@ -20,13 +20,6 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
     /** Load a specific membership (e.g., to change org-scoped roleName). */
     Optional<OrgMembership> findByOrganization_OrgIdAndUser_UserId(UUID orgId, UUID userId);
 
-    Page<OrgMembership> findByOrganization_OrgId(UUID orgId, Pageable pageable);
-
-    Page<OrgMembership> findByUser_UserId(UUID userId, Pageable pageable);
-
-
-    boolean existsByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
-
     Optional<OrgMembership> findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
 
 
@@ -60,6 +53,14 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
        """)
     void disableAllForOrg(@Param("orgId") UUID orgId);
 
+    @Query("select count(m) from OrgMembership m where m.organization.orgId = :orgId and upper(m.roleName) = :roleName and m.isEnabled = true")
+    long countByOrganization_OrgIdAndRoleNameAndIsEnabledTrue(UUID orgId, String roleName);
 
+    Page<OrgMembership> findByOrganization_OrgId(UUID orgId, Pageable pageable);
 
+    Page<OrgMembership> findByUser_UserId(UUID userId, Pageable pageable);
+
+    boolean existsByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
+
+    void deleteByOrganization_OrgIdAndUser_UserId(UUID orgId, UUID userId);
 }

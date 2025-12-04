@@ -1,17 +1,10 @@
-
 // src/shared/store/authStore.ts
 // ------------------------------------------------------------------
 // Global auth + organization store for the Election Vote Tracker.
+// Enhanced: add currentElectionId + persistence to sessionStorage so
+// the dashboard's selected election is remembered across reloads.
 //
-// This store will:
-// - Hold the authenticated user
-// - Hold the auth token (e.g., JWT)
-// - Track the currently selected organization (for X-Org-Id)
-// - Provide actions to log in, log out, and select an org
-//
-// NOTE (current phase):
-// - No real backend integration yet.
-// - We'll wire real login + org APIs in later steps.
+// Place this file at: src/shared/store/authStore.ts
 // ------------------------------------------------------------------
 
 import { create } from "zustand";
@@ -39,41 +32,111 @@ type AuthState = {
   user: AuthUser | null;
   token: string | null;
   currentOrgId: string | null;
+  currentElectionId: string | null;
+
   // Actions
   setAuth: (payload: { user: AuthUser; token: string }) => void;
   setToken: (token: string | null) => void;
   clearAuth: () => void;
   setCurrentOrg: (orgId: string | null) => void;
+  setCurrentElection: (electionId: string | null) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  token: null,
-  currentOrgId: null,
+const ELECTION_KEY = "evt.currentElectionId";
+const ORG_KEY = "evt.currentOrgId";
+const TOKEN_KEY = "evt.token";
 
-  // For future flows where backend returns both user + token
-  setAuth: ({ user, token }) =>
-    set({
-      user,
-      token,
-    }),
+/**
+ * Try to hydrate persisted small state from sessionStorage.
+ * We only persist electionId and orgId + token (optional) to survive reloads.
+ */
+function loadPersisted(): Partial<AuthState> {
+  try {
+    const currentElectionId = sessionStorage.getItem(ELECTION_KEY);
+    const currentOrgId = sessionStorage.getItem(ORG_KEY);
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    return {
+      currentElectionId: currentElectionId ? currentElectionId : null,
+      currentOrgId: currentOrgId ? currentOrgId : null,
+      token: token ? token : null,
+    };
+  } catch (e) {
+    // sessionStorage may be unavailable in some environments; fail silently
+    return {};
+  }
+}
 
-  // For simple flows where we only have a token (current case)
-  setToken: (token) =>
-    set((state) => ({
-      ...state,
-      token,
-    })),
+export const useAuthStore = create<AuthState>((set) => {
+  const persisted = loadPersisted();
 
-  clearAuth: () =>
-    set({
-      user: null,
-      token: null,
-      currentOrgId: null,
-    }),
+  return {
+    user: null,
+    token: (persisted.token as string) ?? null,
+    currentOrgId: (persisted.currentOrgId as string) ?? null,
+    currentElectionId: (persisted.currentElectionId as string) ?? null,
 
-  setCurrentOrg: (orgId) =>
-    set({
-      currentOrgId: orgId,
-    }),
-}));
+    // For future flows where backend returns both user + token
+    setAuth: ({ user, token }) =>
+      set(() => {
+        try {
+          if (token) sessionStorage.setItem(TOKEN_KEY, token);
+        } catch (_) {}
+        return {
+          user,
+          token,
+        };
+      }),
+
+    // For simple flows where we only have a token (current case)
+    setToken: (token) =>
+      set(() => {
+        try {
+          if (token) {
+            sessionStorage.setItem(TOKEN_KEY, token);
+          } else {
+            sessionStorage.removeItem(TOKEN_KEY);
+          }
+        } catch (_) {}
+        return {
+          token,
+        };
+      }),
+
+    clearAuth: () =>
+      set(() => {
+        try {
+          sessionStorage.removeItem(ELECTION_KEY);
+          sessionStorage.removeItem(ORG_KEY);
+          sessionStorage.removeItem(TOKEN_KEY);
+        } catch (_) {}
+        return {
+          user: null,
+          token: null,
+          currentOrgId: null,
+          currentElectionId: null,
+        };
+      }),
+
+    setCurrentOrg: (orgId) =>
+      set(() => {
+        try {
+          if (orgId) sessionStorage.setItem(ORG_KEY, orgId);
+          else sessionStorage.removeItem(ORG_KEY);
+        } catch (_) {}
+        return {
+          currentOrgId: orgId,
+        };
+      }),
+
+    setCurrentElection: (electionId) =>
+      set(() => {
+        try {
+          if (electionId) sessionStorage.setItem(ELECTION_KEY, electionId);
+          else sessionStorage.removeItem(ELECTION_KEY);
+        } catch (_) {}
+        return {
+          currentElectionId: electionId,
+        };
+      }),
+  };
+});

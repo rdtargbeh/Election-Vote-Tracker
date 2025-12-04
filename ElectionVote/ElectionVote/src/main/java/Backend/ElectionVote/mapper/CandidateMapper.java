@@ -24,8 +24,11 @@ public class CandidateMapper {
         if (entity.getParty() != null) {
             dto.setPartyId(entity.getParty().getPartyId());
             dto.setPartyName(entity.getParty().getPartyName());
-            dto.setPartyAbbreviation(entity.getParty().getAbbreviation());
+            dto.setAbbreviation(entity.getParty().getAbbreviation());
         }
+
+        dto.setDateCreated(entity.getDateCreated());
+        dto.setDateUpdated(entity.getDateUpdated());
 
         return dto;
     }
@@ -39,7 +42,6 @@ public class CandidateMapper {
         c.setPosition(req.getPosition());
         c.setPhotoUrl(req.getPhotoUrl());
         c.setActive(true); // default on create
-        c.setParty(party);
 
         // Default independent=false unless explicitly true
         boolean isIndependent = Boolean.TRUE.equals(req.getIndependent());
@@ -48,7 +50,10 @@ public class CandidateMapper {
         // If independent, ensure no party attached at entity level (extra safety)
         if (isIndependent) {
             c.setParty(null);
+        } else {
+            c.setParty(party);
         }
+
 
         return c;
     }
@@ -76,23 +81,4 @@ public class CandidateMapper {
     }
 
 
-//    public Candidate toEntity(CandidateCreateRequest req, Party party) {
-//        if (req == null) return null;
-//        Candidate c = new Candidate();
-//        c.setFullName(req.getFullName());
-//        c.setPosition(req.getPosition());
-//        c.setParty(party);
-//        c.setPhotoUrl(req.getPhotoUrl());
-//        c.setActive(req.isActive());
-//        return c;
-//    }
-//
-//    public void apply(CandidateUpdateRequest req, Candidate c, Party newPartyOrNull) {
-//        if (req == null || c == null) return;
-//        if (req.getFullName() != null) c.setFullName(req.getFullName());
-//        if (req.getPosition() != null) c.setPosition(req.getPosition());
-//        if (req.getPhotoUrl() != null) c.setPhotoUrl(req.getPhotoUrl());
-//        if (req.getIsActive() != null) c.setActive(req.getIsActive());
-//        if (req.getPartyId() != null)  c.setParty(newPartyOrNull); // resolve in service
-//    }
 }

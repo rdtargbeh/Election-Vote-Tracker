@@ -32,4 +32,6 @@ public class VoteSubmissionCreateRequest {
     private String clientIp; private String userAgent;
     @DecimalMin("-90.0") @DecimalMax("90.0")  private Double latitude;
     @DecimalMin("-180.0") @DecimalMax("180.0") private Double longitude;
+
+    private String idempotencyKey;
 }

@@ -1,7 +1,7 @@
 package Backend.ElectionVote.mapper;
 
 import Backend.ElectionVote.dto.NecResultGeoDto;
-import Backend.ElectionVote.entity.NecResultGeo;
+import Backend.ElectionVote.views.NecResultGeo;
 import org.springframework.stereotype.Component;
 
 @Component

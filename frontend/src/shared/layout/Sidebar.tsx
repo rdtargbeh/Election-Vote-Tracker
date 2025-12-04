@@ -41,7 +41,10 @@ const Sidebar: React.FC = () => {
         </p>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1 text-sm">
+      <nav
+        className="flex-1 px-3 py-4 space-y-1 text-sm"
+        aria-label="Main navigation"
+      >
         <p className="px-2 text-xs font-semibold text-slate-500 uppercase mb-2">
           Main
         </p>

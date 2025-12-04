@@ -1,9 +1,13 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.security.BaseAuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -14,7 +18,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "candidate")
-public class Candidate {
+public class Candidate extends BaseAuditedEntity  {
 
     @Id
     @GeneratedValue
@@ -40,6 +44,14 @@ public class Candidate {
 
     @Column(name = "is_independent", nullable = false)
     private boolean independent = false;
+
+    @CreationTimestamp
+    @Column(name = "date_created", nullable = false, updatable = false)
+    private LocalDateTime dateCreated;
+
+    @UpdateTimestamp
+    @Column(name = "date_updated")
+    private LocalDateTime dateUpdated;
 
 
     @Override

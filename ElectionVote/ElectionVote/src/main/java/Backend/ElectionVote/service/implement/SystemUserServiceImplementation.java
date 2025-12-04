@@ -545,6 +545,21 @@ public class SystemUserServiceImplementation implements SystemUserService {
         return dto;
     }
 
+
+
+    // inside SystemUserServiceImpl (or similar)
+
+
+    @Override
+    public Optional<UserDto> getInTenant(UUID id, UUID orgId) {
+        // ensure check organization/tenant match in repository query
+        return systemUserRepository.findByIdAndOrgId(id, orgId).map(mapper::toDTO);
+    }
+
+    @Override
+    public Optional<UserDto> getByUsernameInTenant(String username, UUID orgId) {
+        return systemUserRepository.findByUsernameAndOrgId(username, orgId).map(mapper::toDTO);
+    }
 }
 
 

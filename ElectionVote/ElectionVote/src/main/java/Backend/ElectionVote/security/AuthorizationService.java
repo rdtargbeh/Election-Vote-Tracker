@@ -30,6 +30,8 @@ public interface AuthorizationService {
      */
     OrgMembership requireMembership();
 
+    OrgMembership requireNecAdminOrPlatformAdmin();
+
     /**
      * Ensures current user has any of the provided role names (case-insensitive) in this tenant.
      * Global SYSTEM_ADMIN always passes.
@@ -50,4 +52,16 @@ public interface AuthorizationService {
     Set<String> currentRoles();
 
     void requirePlatformAdmin();
+
+    /**
+     * Ensures the caller is either:
+     *  - a platform/system admin (global), OR
+     *  - an enabled member of the current tenant with ANY of the provided role names.
+     *
+     * This variant is safe to call when there may be no TenantContext (platform operations),
+     * because it first checks platform admin status before attempting tenant membership resolution.
+     *
+     * Throws AccessDeniedException when neither condition is satisfied.
+     */
+    void requireAnyInTenantOrPlatformAdmin(String... roleNames);
 }

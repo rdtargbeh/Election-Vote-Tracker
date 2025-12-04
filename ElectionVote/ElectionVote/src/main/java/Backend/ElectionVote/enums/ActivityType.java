@@ -83,6 +83,10 @@ public enum ActivityType {
     SYSTEM_EVENT,
     SYSTEM_ERROR,
 
+
+    // Vote tally recompute (new)
+    TALLY_RECOMPUTE,
+
     OTHER
 }
 

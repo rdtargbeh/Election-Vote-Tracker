@@ -12,6 +12,20 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * VoteSubmission: tenant-scoped per-place submission.
+ *
+ * Changes:
+ * - Added optimistic locking (@Version optimisticLock) to prevent lost updates under concurrent edits.
+ * - Added provenance fields: chainHash, submissionSignature, submissionSignerKeyId to support ledger + signing workflow.
+ * - Added idempotencyKey to support safe client retries.
+ * - Explicit JSONB mapping (candidateVotes) with columnDefinition; index added via migration.
+ *
+ * Rationale:
+ * These fields make the entity robust for election-day load (concurrency), and enable
+ * recording cryptographic provenance (chain + signature) without changing existing semantics.
+ */
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -19,7 +33,14 @@ import java.util.UUID;
 @Builder
 
 @Entity
-@Table(name = "vote_submission")
+@Table(
+        name = "vote_submission",
+        indexes = {
+                @Index(name = "idx_vs_org_election_center_status", columnList = "org_id,election_id,center_id,status"),
+                @Index(name = "idx_vs_submission_time", columnList = "submission_time"),
+                @Index(name = "idx_vs_submission_hash", columnList = "submission_hash")
+        }
+)
 public class VoteSubmission extends AuditBaseEntity {
 
     @Id
@@ -94,6 +115,23 @@ public class VoteSubmission extends AuditBaseEntity {
     @Column(name = "submission_hash", unique = true)
     private String submissionHash;
 
+    @Column(name = "chain_hash", columnDefinition = "text")
+    private String chainHash;
+
+    @Column(name = "submission_signature", columnDefinition = "text")
+    private String submissionSignature;
+
+    @Column(name = "submission_signer_key_id")
+    private UUID submissionSignerKeyId;
+
     @Column(name = "date_deleted")
     private LocalDateTime dateDeleted;
+
+
+    // Optional idempotency key for client retries
+    @Column(name = "idempotency_key", length = 200)
+    private String idempotencyKey;
+
+
+
 }

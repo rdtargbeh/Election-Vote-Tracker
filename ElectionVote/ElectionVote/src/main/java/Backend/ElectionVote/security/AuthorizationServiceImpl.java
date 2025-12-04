@@ -163,7 +163,38 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         }
     }
 
-// 🔹 NEW: platform-level admin guard (no tenant required)
+    @Override
+    public OrgMembership requireNecAdminOrPlatformAdmin() {
+
+        // 1) Platform-level admin (global override)
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+            boolean isSystemAdmin = auth.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
+
+            if (isSystemAdmin) {
+                // Return synthetic membership to satisfy callers
+                TenantContext ctx = TenantContext.get();
+                UUID userId = (ctx != null ? ctx.userId().orElse(null) : null);
+                UUID orgId  = (ctx != null ? ctx.orgId().orElse(null) : null);
+                return OrgMembership.systemAdmin(userId, orgId);
+            }
+        }
+
+        // 2) Otherwise, this must be a normal NEC_ADMIN inside NEC tenant
+        OrgMembership m = requireMembership(); // already resolves tenant + user
+
+        if ("NEC_ADMIN".equalsIgnoreCase(m.getRoleName())) {
+            return m;
+        }
+
+        throw new AccessDeniedException("NEC Admin or System Admin required");
+    }
+
+
+
+    // 🔹 NEW: platform-level admin guard (no tenant required)
 @Override
 public void requirePlatformAdmin() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -217,6 +248,51 @@ public void requirePlatformAdmin() {
         throw new AccessDeniedException("Platform admin required");
     }
 }
+
+
+    @Override
+    public void requireAnyInTenantOrPlatformAdmin(String... roleNames) {
+        // First: if caller is platform/system admin based on authentication, allow immediately.
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+            boolean isSystemAdmin = false;
+
+            // Check JWT claim & authorities
+            Object principal = auth.getPrincipal();
+            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+                Jwt jwt = jwtAuth.getToken();
+                Object claimVal = jwt.getClaims().get("isSystemAdmin");
+                if (claimVal instanceof Boolean b) isSystemAdmin = b;
+                else if (claimVal instanceof String s) isSystemAdmin = Boolean.parseBoolean(s);
+
+                if (!isSystemAdmin) {
+                    isSystemAdmin = jwtAuth.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
+                }
+            } else {
+                if (principal instanceof Jwt jwt) {
+                    Object claimVal = jwt.getClaims().get("isSystemAdmin");
+                    if (claimVal instanceof Boolean b) isSystemAdmin = b;
+                    else if (claimVal instanceof String s) isSystemAdmin = Boolean.parseBoolean(s);
+                }
+
+                if (!isSystemAdmin) {
+                    isSystemAdmin = auth.getAuthorities().stream()
+                            .map(GrantedAuthority::getAuthority)
+                            .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
+                }
+            }
+
+            if (isSystemAdmin) {
+                // platform admin — allow
+                return;
+            }
+        }
+
+        // Not platform admin — fall back to tenant-scoped check which will validate membership.
+        requireAny(roleNames);
+    }
 
 
     /* ---------------- helpers ---------------- */

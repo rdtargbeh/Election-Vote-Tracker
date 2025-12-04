@@ -1,6 +1,6 @@
 package Backend.ElectionVote.utility;
 
-import Backend.ElectionVote.entity.NecResultGeo;
+import Backend.ElectionVote.views.NecResultGeo;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;

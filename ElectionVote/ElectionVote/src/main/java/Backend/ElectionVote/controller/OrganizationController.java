@@ -4,6 +4,7 @@ import Backend.ElectionVote.dto.OrganizationCreateRequest;
 import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
 import Backend.ElectionVote.enums.OrganizationType;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import jakarta.validation.Valid;
@@ -24,7 +25,9 @@ import java.util.UUID;
 public class OrganizationController {
 
     @Autowired
-    private  OrganizationService organizationService;
+    private OrganizationService organizationService;
+    @Autowired
+    private AuthorizationService authz;
 
 
     @PostMapping
@@ -56,12 +59,14 @@ public class OrganizationController {
 
     @PutMapping("/{id}")
     public OrganizationDto update(@PathVariable UUID id, @Valid @RequestBody OrganizationUpdateRequest req) {
+        authz.requireNecAdminOrPlatformAdmin(); // Required System Admin or NEC Admin
         return organizationService.update(id, req);
     }
 
     @PatchMapping("/{id}/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setActive(@PathVariable UUID id, @RequestBody @Valid SetActiveRequest body) {
+        authz.requireNecAdminOrPlatformAdmin(); // Required System Admin or NEC Admin
         organizationService.setActive(id, body.active());
     }
 

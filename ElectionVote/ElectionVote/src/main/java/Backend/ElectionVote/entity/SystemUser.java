@@ -1,8 +1,11 @@
 package Backend.ElectionVote.entity;
 
+import Backend.ElectionVote.security.BaseAuditedEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
@@ -25,8 +28,9 @@ import java.util.UUID;
                 @Index(name="idx_users_username", columnList="user_name")
         }
 )
-
-public class SystemUser {
+@ToString(exclude = {"password", "role", "party", "assignedCounty", "defaultOrg"})
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+public class SystemUser extends BaseAuditedEntity {
 
     @Id
     @GeneratedValue
@@ -49,17 +53,22 @@ public class SystemUser {
     @Column(name = "phone_number", length = 20)
     private String phoneNumber;
 
+
+    /**
+     * Keep field name "password" for compatibility with existing service code (it maps to password_hash column).
+     * Never serialize this value in any API response.
+     */
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false, columnDefinition = "TEXT")
     private String password;
 
     /**
      * Relationships
      **/
-
-    // Role reference
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_user_role"))
     private UserRole role;
+
 
     // Party reference
     @ManyToOne(fetch = FetchType.LAZY)
@@ -109,6 +118,23 @@ public class SystemUser {
     @Column(name = "date_created", nullable = false, updatable = false)
     private LocalDateTime dateCreated = LocalDateTime.now();
 
+    @UpdateTimestamp
+    @Column(name = "date_updated")
+    private LocalDateTime dateUpdated;
+
+
+    /**
+     * New: signingKeyId - optional reference to an external signing key id for this user.
+     * This is useful when users sign submissions or we record which key id produced signatures.
+     */
+    @Column(name = "signing_key_id")
+    private UUID signingKeyId;
+
+    // Convenience helper
+    @JsonIgnore
+    public boolean isLocked() {
+        return lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now());
+    }
 
     // GETTER & SETTER
 

@@ -39,7 +39,8 @@ public class ElectionController {
      */
     @PostMapping
     public ElectionDto create(@Valid @RequestBody ElectionCreateRequest req) {
-        authz.requirePlatformAdmin();   // <-- protect creation
+        authz.requireNecAdminOrPlatformAdmin();  authz.requireNecAdminOrPlatformAdmin();
+//        authz.requirePlatformAdmin();   // <-- protect creation
         return electionService.create(req);
     }
 
@@ -50,7 +51,7 @@ public class ElectionController {
     @PutMapping("/{id}")
     public ElectionDto update(@PathVariable UUID id,
                               @Valid @RequestBody ElectionUpdateRequest req) {
-        authz.requirePlatformAdmin();   // <-- protect update
+        authz.requireNecAdminOrPlatformAdmin();   // <-- protect update
         return electionService.update(id, req);
     }
 
@@ -60,7 +61,7 @@ public class ElectionController {
      */
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
-        authz.requirePlatformAdmin();   // <-- protect delete
+        authz.requireNecAdminOrPlatformAdmin();   // <-- protect delete
         electionService.delete(id);
     }
 

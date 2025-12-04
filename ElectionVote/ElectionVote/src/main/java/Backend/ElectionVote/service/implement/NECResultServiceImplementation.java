@@ -7,6 +7,7 @@ import Backend.ElectionVote.mapper.NECResultMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.NECResultService;
 import Backend.ElectionVote.utility.NECResultSpecs;
+import Backend.ElectionVote.views.NecResultGeo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -19,7 +20,6 @@ import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.*;
 

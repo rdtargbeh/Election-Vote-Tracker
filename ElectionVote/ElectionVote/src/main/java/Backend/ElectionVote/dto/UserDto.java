@@ -27,8 +27,10 @@ public class UserDto {
     private UUID defaultOrgId;         // nullable
     private LocalDateTime lastLogin;   // nullable
     private LocalDateTime dateCreated;
+    private LocalDateTime dateUpdated;
     private int failedLoginAttempts = 0;
     private LocalDateTime lockedUntil;
     private LocalDateTime lastPasswordChange;
+    private UUID signingKeyId;         // NEW: optional signing key id associated with user
 
 }

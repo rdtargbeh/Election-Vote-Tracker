@@ -3,6 +3,7 @@ package Backend.ElectionVote.repository;
 import Backend.ElectionVote.entity.NECResult;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -149,5 +150,15 @@ public interface NECResultRepository extends JpaRepository<NECResult, UUID>, Jpa
     """, nativeQuery = true)
     List<Object[]> dailyByCandidate(@Param("electionId") UUID electionId);
 
+    List<NECResult> findByElection_ElectionId(UUID electionId);
+
+    @Modifying
+    @Query("""
+        UPDATE NECResult nr
+           SET nr.isPublished = true,
+               nr.publishedAt = CURRENT_TIMESTAMP
+         WHERE nr.election.electionId = :electionId
+        """)
+    int publishElectionResults(UUID electionId);
 
 }

@@ -3,6 +3,7 @@ package Backend.ElectionVote.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -20,4 +21,10 @@ public class ElectionCandidateDto {
 
     private UUID centerId;
     private String centerName;
+
+    private UUID partyId;
+    private String partyAbbrev;
+
+    private LocalDateTime dateCreated;
+    private LocalDateTime dateUpdated;
 }

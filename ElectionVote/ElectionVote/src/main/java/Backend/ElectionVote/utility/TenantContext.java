@@ -27,5 +27,33 @@ public final class TenantContext {
     public Optional<UUID> orgId() { return Optional.ofNullable(orgId); }
     public boolean isSystemAdmin() { return isSystemAdmin; }
 
+
+    // ---------- New helpers ----------
+
+    /** Returns current orgId or null if not set. */
+    public static UUID getCurrentOrgIdOrNull() {
+        TenantContext ctx = CTX.get();
+        return (ctx == null) ? null : ctx.orgId;
+    }
+
+    /** Returns current orgId or throws IllegalStateException if missing. */
+    public static UUID requireCurrentOrgId() {
+        TenantContext ctx = CTX.get();
+        if (ctx == null || ctx.orgId == null) {
+            throw new IllegalStateException("No current orgId in TenantContext");
+        }
+        return ctx.orgId;
+    }
+
+    /** Returns current userId or throws IllegalStateException if missing. */
+    public static UUID requireCurrentUserId() {
+        TenantContext ctx = CTX.get();
+        if (ctx == null || ctx.userId == null) {
+            throw new IllegalStateException("No current userId in TenantContext");
+        }
+        return ctx.userId;
+    }
+
+
 }
 

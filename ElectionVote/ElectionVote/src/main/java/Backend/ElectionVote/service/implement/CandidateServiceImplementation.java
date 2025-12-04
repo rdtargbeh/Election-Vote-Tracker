@@ -8,6 +8,8 @@ import Backend.ElectionVote.entity.Party;
 import Backend.ElectionVote.mapper.CandidateMapper;
 import Backend.ElectionVote.repository.CandidateRepository;
 import Backend.ElectionVote.repository.PartyRepository;
+import Backend.ElectionVote.security.AuthorizationService;
+import Backend.ElectionVote.security.CurrentUserProvider;
 import Backend.ElectionVote.service.CandidateService;
 import Backend.ElectionVote.utility.CandidateSpecs;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -30,12 +33,18 @@ public class CandidateServiceImplementation implements CandidateService {
     private CandidateRepository candidateRepository;
     @Autowired
     private PartyRepository partyRepository;
+
+    private final CurrentUserProvider currentUserProvider;
+    private final JdbcTemplate jdbc;
+    private final AuthorizationService authz;
     private final CandidateMapper mapper = new CandidateMapper();
 
 
 
     @Override
     public CandidateDto create(CandidateCreateRequest req) {
+
+        authz.requireNecAdminOrPlatformAdmin();  // Only NEC admin or platform admin can update candidates
 
         // Determine independent flag explicitly
         boolean isIndependent = Boolean.TRUE.equals(req.getIndependent());
@@ -74,6 +83,18 @@ public class CandidateServiceImplementation implements CandidateService {
             }
         }
         Candidate saved = candidateRepository.save(mapper.toEntity(req, party));
+
+        // Audit log (best-effort)
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Candidate created: " + saved.getFullName() + " (" + saved.getCandidateId() + ")";
+            jdbc.update(
+                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[] { actor, "CANDIDATE_CREATE", "candidate", desc }
+            );
+        } catch (Exception ignored) {}
+
+
         return mapper.toDTO(saved);
     }
 
@@ -81,6 +102,8 @@ public class CandidateServiceImplementation implements CandidateService {
 
     @Override
     public CandidateDto update(UUID id, CandidateUpdateRequest req) {
+
+        authz.requireNecAdminOrPlatformAdmin();  // Only NEC admin or platform admin can update candidates
 
         Candidate entity = candidateRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Candidate not found"));
@@ -151,16 +174,40 @@ public class CandidateServiceImplementation implements CandidateService {
         mapper.apply(req, entity, newParty);
         Candidate saved = candidateRepository.save(entity);
 
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Candidate updated: " + saved.getFullName() + " (" + saved.getCandidateId() + ")";
+            jdbc.update(
+                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[] { actor, "CANDIDATE_UPDATE", "candidate", desc }
+            );
+        } catch (Exception ignored) {}
+
+
         return mapper.toDTO(saved);
     }
 
 
     @Override
     public void delete(UUID id) {
+
+        authz.requireNecAdminOrPlatformAdmin();  // Only NEC admin or platform admin can update candidates
+
         if (!candidateRepository.existsById(id)) {
             throw new ResponseStatusException(NOT_FOUND, "Candidate not found");
         }
         candidateRepository.deleteById(id);
+
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Candidate deleted: " + id;
+            jdbc.update(
+                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[] { actor, "CANDIDATE_DELETE", "candidate", desc }
+            );
+        } catch (Exception ignored) {}
     }
 
     @Override

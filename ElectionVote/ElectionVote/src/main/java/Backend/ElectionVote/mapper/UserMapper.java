@@ -22,6 +22,7 @@ public class UserMapper {
         dto.setActive(user.isActive());
         dto.setVerified(user.isVerified());
 
+
         // role enum -> String (change UserDto to enum if you prefer)
         dto.setRoleName(user.getRole() != null ? user.getRole().getRoleName().name() : null);
         dto.setPartyId(user.getParty() != null ? user.getParty().getPartyId() : null);
@@ -30,6 +31,16 @@ public class UserMapper {
 
         dto.setLastLogin(user.getLastLogin());
         dto.setDateCreated(user.getDateCreated());
+        dto.setDateUpdated(user.getDateUpdated());
+
+        // expose signing key id if associated
+        dto.setSigningKeyId(user.getSigningKeyId());
+
+        dto.setFailedLoginAttempts(user.getFailedLoginAttempts());
+        dto.setLockedUntil(user.getLockedUntil());
+        dto.setLastPasswordChange(user.getLastPasswordChange());
+
+
 
         return dto;
     }

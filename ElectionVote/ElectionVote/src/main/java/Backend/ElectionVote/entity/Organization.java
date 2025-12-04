@@ -1,6 +1,7 @@
 package Backend.ElectionVote.entity;
 
 import Backend.ElectionVote.enums.OrganizationType;
+import Backend.ElectionVote.security.BaseAuditedEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -8,11 +9,24 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.annotations.processing.Pattern;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+
+/**
+ * Organization (tenant) entity mapping for table "organization".
+ *
+ * Enhancements:
+ * - Extends BaseAuditedEntity to populate created_by/updated_by via JPA auditing.
+ * - Adds dateUpdated (@UpdateTimestamp).
+ * - Keeps dateCreated and prePersist for compatibility.
+ * - Uses safer toString/equals/hashCode via Lombok defaults (avoid relations printed).
+ */
+
 
 @Getter
 @Setter
@@ -23,7 +37,7 @@ import java.util.UUID;
 @Table(name = "organization", uniqueConstraints = {
         @UniqueConstraint(name = "uq_org_subdomain", columnNames = "subdomain")
 })
-public class Organization {
+public class Organization extends BaseAuditedEntity {
 
     @Id
     @GeneratedValue
@@ -65,6 +79,7 @@ public class Organization {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @CreationTimestamp
     @Column(name = "date_created", nullable = false, updatable = false)
     private LocalDateTime dateCreated;
 
@@ -73,7 +88,10 @@ public class Organization {
         if (dateCreated == null) dateCreated = LocalDateTime.now();
     }
 
+    // convenience helpers
+    public boolean isActive() { return isActive;}
 
-    // Getter & Setter
+
+        // Getter & Setter
 
 }

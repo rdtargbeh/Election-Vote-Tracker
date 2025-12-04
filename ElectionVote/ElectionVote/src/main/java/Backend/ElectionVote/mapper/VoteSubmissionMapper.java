@@ -123,6 +123,7 @@ public class VoteSubmissionMapper {
                 .userAgent(s.getUserAgent())
                 .submissionHash(s.getSubmissionHash())
                 .version(s.getVersion())
+                .idempotencyKey(s.getIdempotencyKey())
 
                 .build();
     }

@@ -8,6 +8,8 @@ import Backend.ElectionVote.entity.Party;
 import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.mapper.OrganizationMapper;
 import Backend.ElectionVote.repository.*;
+import Backend.ElectionVote.security.AuthorizationService;
+import Backend.ElectionVote.security.CurrentUserProvider;
 import Backend.ElectionVote.service.OrganizationService;
 import Backend.ElectionVote.utility.OrganizationSearchRequest;
 import Backend.ElectionVote.utility.QueryUtils;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,16 +30,16 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class OrganizationServiceImplementation implements OrganizationService {
 
-    @Autowired
-    private  OrganizationRepository organizationRepository;
-    @Autowired
-    private  PartyRepository partyRepository;
-    @Autowired
-    private UserSessionRepository userSessionRepository;
-    @Autowired
-    private OrgMembershipRepository orgMembershipRepository;
+
+    private final OrganizationRepository organizationRepository;
+    private final  PartyRepository partyRepository;
+    private final UserSessionRepository userSessionRepository;
+    private final OrgMembershipRepository orgMembershipRepository;
 
     private final OrganizationMapper mapper = new OrganizationMapper();
+
+    private final CurrentUserProvider currentUserProvider;
+    private final JdbcTemplate jdbc;
 
 
     @Override
@@ -63,9 +66,19 @@ public class OrganizationServiceImplementation implements OrganizationService {
 
         // 4) Save organization
         Organization saved = organizationRepository.save(org);
+
+        // 5) Audit log (insert a human-readable audit_log row)
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Organization created: " + saved.getOrgName() + " (" + saved.getOrgId() + ")";
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
+                    new Object[]{ saved.getOrgId(), actor, "ORGANIZATION_CREATE", "organization", desc });
+        } catch (Exception ignored) {
+            // Do not fail creation on audit logging failure, but in prod you should alert/monitor this
+        }
+
         return mapper.toDTO(saved);
     }
-
 
 
     @Override
@@ -80,7 +93,6 @@ public class OrganizationServiceImplementation implements OrganizationService {
         if (sub == null) return Optional.empty();
         return organizationRepository.findBySubdomainIgnoreCase(sub).map(mapper::toDTO);
     }
-
 
     @Override
     public Page<OrganizationDto> search(OrganizationSearchRequest req, Pageable pageable) {
@@ -107,22 +119,62 @@ public class OrganizationServiceImplementation implements OrganizationService {
                 }
             }
             org.setSubdomain(sub); // may be null to clear
-            org.setOrgName(req.getOrgName());
-            org.setActive(req.getActive());
-            org.setLogoUrl(req.getLogoUrl());
-            org.setPrimaryColor(req.getPrimaryColor());
-            org.setOrganizationType(req.getOrganizationType());
         }
+
         // apply scalar changes via mapper (safe fields only)
         mapper.apply(req, org);
 
+        // Attach/clear party if provided
+        if (req.getPartyId() != null) {
+            Party party = partyRepository.findById(req.getPartyId())
+                    .orElseThrow(() -> new NoSuchElementException("Party not found: " + req.getPartyId()));
+            org.setParty(party);
+        } else if (req.getPartyId() == null) {
+            org.setParty(null); // explicit clear
+        }
+
         Organization saved = organizationRepository.save(org);
+
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Organization updated: " + saved.getOrgName() + " (" + saved.getOrgId() + ")";
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
+                    new Object[]{ saved.getOrgId(), actor, "ORGANIZATION_UPDATE", "organization", desc });
+        } catch (Exception ignored) {}
+
+
         return mapper.toDTO(saved);
+
+
+         // Old version ++++++++
+//        // subdomain: only validate when the client sent a value (including blank)
+//        if (req.getSubdomain() != null) {
+//            String sub = normalizeSubdomain(req.getSubdomain());
+//            if (sub != null) {
+//                if (organizationRepository.existsBySubdomainIgnoreCaseAndOrgIdNot(sub, orgId)) {
+//                    throw new IllegalArgumentException("Subdomain already in use");
+//                }
+//            }
+//            org.setSubdomain(sub); // may be null to clear
+//            org.setOrgName(req.getOrgName());
+//            org.setActive(req.getActive());
+//            org.setLogoUrl(req.getLogoUrl());
+//            org.setPrimaryColor(req.getPrimaryColor());
+//            org.setOrganizationType(req.getOrganizationType());
+//        }
+//        // apply scalar changes via mapper (safe fields only)
+//        mapper.apply(req, org);
+//        Organization saved = organizationRepository.save(org)//        ;
+//        return mapper.toDTO(saved);
+
     }
+
 
     @Override
     @Transactional
     public void setActive(UUID orgId, boolean active) {
+
         Organization org = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new NoSuchElementException("Organization not found"));
 
@@ -133,6 +185,14 @@ public class OrganizationServiceImplementation implements OrganizationService {
             orgMembershipRepository.disableAllForOrg(orgId);   // custom repo method
             userSessionRepository.revokeAllForOrg(orgId);      // optional but nice
         }
+
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "Organization " + (active ? "activated: " : "deactivated: ") + org.getOrgName() + " (" + org.getOrgId() + ")";
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
+                    new Object[]{ org.getOrgId(), actor, "ORGANIZATION_SET_ACTIVE", "organization", desc });
+        } catch (Exception ignored) {}
     }
 
 

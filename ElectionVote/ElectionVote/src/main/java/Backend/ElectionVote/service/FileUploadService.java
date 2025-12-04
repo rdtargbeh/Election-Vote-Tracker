@@ -9,9 +9,15 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+/**
+ * Abstraction for storing uploaded files (tally sheets, photos).
+ * Implementations should implement delete() and getProviderName().
+ */
 
 public interface FileUploadService {
 

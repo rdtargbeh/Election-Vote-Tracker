@@ -21,6 +21,7 @@ public class OrganizationDto {
     private String subdomain;
     private boolean active;
     private LocalDateTime dateCreated;
+    private LocalDateTime dateUpdated;
 
     private UUID partyId;
     private String partyName;

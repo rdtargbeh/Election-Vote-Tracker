@@ -9,10 +9,13 @@ import Backend.ElectionVote.entity.ElectionCandidate;
 import Backend.ElectionVote.entity.PollingCenter;
 import Backend.ElectionVote.mapper.ElectionCandidateMapper;
 import Backend.ElectionVote.repository.*;
+import Backend.ElectionVote.security.AuthorizationService;
+import Backend.ElectionVote.security.CurrentUserProvider;
 import Backend.ElectionVote.service.ElectionCandidateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -31,59 +34,46 @@ public class ElectionCandidateServiceImplementation implements ElectionCandidate
     private final PollingCenterRepository pollingCenterRepository;
     private final ElectionPartyRepository electionPartyRepository;
 
+    private final AuthorizationService authz;
+    private final CurrentUserProvider currentUserProvider;
+    private final JdbcTemplate jdbc;
     private final ElectionCandidateMapper mapper;
 
 
 
     @Override
     public ElectionCandidateDto create(ElectionCandidateCreateRequest req) {
+
+        // Authoritative guard in service
+        authz.requireNecAdminOrPlatformAdmin();
+
         // 1) Prevent duplicate candidate in the same election
         if (electionCandidateRepository
                 .existsByElection_ElectionIdAndCandidate_CandidateId(req.getElectionId(), req.getCandidateId())) {
-
-            throw new ResponseStatusException(
-                    CONFLICT,
-                    "Candidate is already registered for this election"
-            );
+            throw new ResponseStatusException(CONFLICT, "Candidate is already registered for this election");
         }
 
         // 2) Load election and candidate
         Election election = electionRepo.findById(req.getElectionId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        NOT_FOUND,
-                        "Election not found"
-                ));
-
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
         Candidate candidate = candidateRepository.findById(req.getCandidateId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        NOT_FOUND,
-                        "Candidate not found"
-                ));
-
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Candidate not found"));
         // 3) Optional polling center (null = nationwide/district-scoped)
         PollingCenter center = (req.getCenterId() != null)
                 ? pollingCenterRepository.findById(req.getCenterId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        NOT_FOUND,
-                        "Polling center not found"
-                ))
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"))
                 : null;
-
         // 4) Enforce party vs. independent rules at service level
         if (candidate.isIndependent()) {
             // Independent candidate must NOT have a party_id
             if (candidate.getParty() != null) {
-                throw new ResponseStatusException(
-                        BAD_REQUEST,
-                        "Independent candidate must not have a party assigned"
-                );
+                throw new ResponseStatusException(BAD_REQUEST, "Independent candidate must not have a party assigned");
             }
             // No election_party check needed for independents
         } else {
             // Party-based candidate must have a party
             if (candidate.getParty() == null || candidate.getParty().getPartyId() == null) {
-                throw new ResponseStatusException(
-                        BAD_REQUEST,
+                throw new ResponseStatusException(BAD_REQUEST,
                         "Candidate must have a party assigned before being registered to an election"
                 );
             }
@@ -96,15 +86,21 @@ public class ElectionCandidateServiceImplementation implements ElectionCandidate
 
             if (!partyRegistered) {
                 throw new ResponseStatusException(
-                        CONFLICT,
-                        "Party " + candidate.getParty().getAbbreviation()
-                                + " is not registered for election '" + election.getElectionName() + "'"
-                );
+                        CONFLICT, "Party " + candidate.getParty().getAbbreviation()
+                                + " is not registered for election '" + election.getElectionName() + "'");
             }
         }
         // 5) Persist election-candidate
         ElectionCandidate saved =
                 electionCandidateRepository.save(mapper.toEntity(req, election, candidate, center));
+
+        // Audit log (best-effort)
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "ElectionCandidate created: electId=" + saved.getElectId();
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[]{actor, "ELECTION_CANDIDATE_CREATE", "election_candidate", desc});
+        } catch (Exception ignored) {}
 
         return mapper.toDTO(saved);   // use toDTO or toDto based on your mapper signature
     }
@@ -112,22 +108,69 @@ public class ElectionCandidateServiceImplementation implements ElectionCandidate
 
     @Override
     public ElectionCandidateDto update(UUID id, ElectionCandidateUpdateRequest req) {
+
+        authz.requireNecAdminOrPlatformAdmin();
+
         ElectionCandidate ec = electionCandidateRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election candidate not found"));
-        PollingCenter newCenter = (req.getCenterId() != null)
-                ? pollingCenterRepository.findById(req.getCenterId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"))
-                : null;
+
+        PollingCenter newCenter = null;
+        if (req.getCenterId() != null) {
+            newCenter = pollingCenterRepository.findById(req.getCenterId())
+                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
+        }
+
+        // If changing center, ensure uniqueness still holds
+        if (newCenter != null && (ec.getPollingCenter() == null || !newCenter.getCenterId().equals(ec.getPollingCenter().getCenterId()))) {
+            boolean dup = electionCandidateRepository.existsByElection_ElectionIdAndCandidate_CandidateIdAndPollingCenter_CenterId(
+                    ec.getElection().getElectionId(), ec.getCandidate().getCandidateId(), newCenter.getCenterId()
+            );
+            if (dup) {
+                throw new ResponseStatusException(CONFLICT, "Another entry already exists for this election/candidate/center");
+            }
+        }
+
         mapper.apply(req, ec, newCenter);
-        return mapper.toDTO(electionCandidateRepository.save(ec));
+        ElectionCandidate saved = electionCandidateRepository.save(ec);
+
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "ElectionCandidate updated: electId=" + saved.getElectId();
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[]{actor, "ELECTION_CANDIDATE_UPDATE", "election_candidate", desc});
+        } catch (Exception ignored) {}
+
+
+//        PollingCenter newCenter = (req.getCenterId() != null)
+//                ? pollingCenterRepository.findById(req.getCenterId())
+//                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"))
+//                : null;
+//        mapper.apply(req, ec, newCenter);
+
+        return mapper.toDTO(saved);
+
     }
+
+
 
     @Override
     public void delete(UUID id) {
+
+        authz.requireNecAdminOrPlatformAdmin();
+
         if (!electionCandidateRepository.existsById(id)) {
             throw new ResponseStatusException(NOT_FOUND, "Election candidate not found");
         }
         electionCandidateRepository.deleteById(id);
+
+        // Audit log
+        try {
+            UUID actor = currentUserProvider.currentUserId();
+            String desc = "ElectionCandidate deleted: " + id;
+            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
+                    new Object[]{actor, "ELECTION_CANDIDATE_DELETE", "election_candidate", desc});
+        } catch (Exception ignored) {}
     }
 
     @Override

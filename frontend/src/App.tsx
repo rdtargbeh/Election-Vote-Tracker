@@ -13,6 +13,7 @@ import HealthCheckPage from "./pages/HealthCheckPage";
 import VoteSubmissionsPage from "./pages/VoteSubmissionsPage";
 import ObserverReportsPage from "./pages/ObserverReportsPage";
 import ResultsOverviewPage from "./pages/ResultsOverviewPage";
+import CreateSubmissionForm from "./pages/CreateSubmissionForm";
 
 const App: React.FC = () => {
   return (
@@ -89,6 +90,26 @@ const App: React.FC = () => {
             </RequireOrg>
           </RequireAuth>
         }
+      />
+
+      {/* Create submission route */}
+      <Route
+        path="/vote-submissions/create"
+        element={
+          <RequireAuth>
+            <RequireOrg>
+              <AppShell>
+                <CreateSubmissionForm />
+              </AppShell>
+            </RequireOrg>
+          </RequireAuth>
+        }
+      />
+
+      {/* convenience redirect for legacy path */}
+      <Route
+        path="/create-submission"
+        element={<Navigate to="/vote-submissions/create" replace />}
       />
 
       {/* 404 fallback */}
