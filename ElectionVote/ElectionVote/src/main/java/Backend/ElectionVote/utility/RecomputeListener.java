@@ -2,6 +2,7 @@ package Backend.ElectionVote.utility;
 
 
 import Backend.ElectionVote.enums.ActivityType;
+import Backend.ElectionVote.service.AdvisoryLockNotAcquiredException;
 import Backend.ElectionVote.utility.RecomputeEvent;
 import Backend.ElectionVote.service.VoteTallyService;
 import Backend.ElectionVote.service.AuditLogService;
@@ -16,6 +17,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 
 /**
@@ -40,6 +44,7 @@ public class RecomputeListener {
     private static final int MAX_RETRIES = 5;
     private static final Duration BASE_DELAY = Duration.ofSeconds(2);
 
+
     public RecomputeListener(VoteTallyService voteTallyService,
                              AuditLogService auditLogService,
                              MeterRegistry meterRegistry) {
@@ -55,20 +60,17 @@ public class RecomputeListener {
         this.scheduler = ts;
     }
 
-    @Async("voteExecutor") // uses your AsyncConfig bean; keeps thread pools consistent
+    @Async("voteExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRecomputeEvent(RecomputeEvent ev) {
         final String key = ev.getOrgId() + ":" + ev.getElectionId();
         log.info("Received RecomputeEvent for {}", key);
         meterRegistry.counter("recompute.events.received").increment();
 
-        // attempt immediate run with retries on advisory-lock contention or transient errors
         try {
             boolean success = tryRunWithRetries(ev.getOrgId(), ev.getElectionId(), ev.getActorUserId(), 0);
             if (!success) {
-                // persistent failure: record audit & metric
                 meterRegistry.counter("recompute.events.failed").increment();
-                // auditLogService.log expects 5 args: orgId, userId, ActivityType, entity, description
                 auditLogService.log(
                         ev.getOrgId(),
                         ev.getActorUserId(),
@@ -94,44 +96,114 @@ public class RecomputeListener {
         }
     }
 
-    private boolean tryRunWithRetries(java.util.UUID orgId, java.util.UUID electionId, java.util.UUID actorUserId, int attempt) {
-        try {
-            // VoteTallyService.recomputeForElection returns empty list if advisory lock prevented immediate run (per our implementation)
-            var result = voteTallyService.recomputeForElection(orgId, electionId, actorUserId);
-            if (result != null && !result.isEmpty()) {
-                return true;
-            } else {
-                // Empty result may mean either: no verified submissions OR lock was held and method returned early.
-                // Distinguish by checking if there are verified submissions quickly (optional), but here we interpret empty as possibly lock contention => retry.
-                if (attempt >= MAX_RETRIES) return false;
+    /**
+     * Attempts recompute. Returns true if a run completed successfully (even if it produced zero tallies
+     * because there truly are no VERIFIED submissions). Returns false if a retry was scheduled or all
+     * retries failed.
+     *
+     * attempt = 0 is the first immediate attempt. We allow up to MAX_RETRIES attempts (0 .. MAX_RETRIES-1).
+     */
+    private boolean tryRunWithRetries(UUID orgId, UUID electionId, UUID actorUserId, int attempt) {
+        log.debug("Recompute attempt #{}/{} for {}/{}", attempt + 1, MAX_RETRIES, orgId, electionId);
 
-                long delayMillis = computeBackoffMillis(attempt);
-                log.warn("Recompute for {}/{} returned empty; scheduling retry #{} after {}ms", orgId, electionId, attempt + 1, delayMillis);
-                ScheduledFuture<?> future = scheduler.schedule(() -> {
-                    tryRunWithRetries(orgId, electionId, actorUserId, attempt + 1);
-                }, java.util.Date.from(java.time.Instant.now().plusMillis(delayMillis)));
-                // we don't need to keep the future reference here; let it run
-                return true; // treat scheduling as "accepted"
+        try {
+            List<?> result = voteTallyService.recomputeForElection(orgId, electionId, actorUserId);
+
+            int count = result == null ? 0 : result.size();
+            log.info("Recompute succeeded for org={} election={} produced {} tallies (attempt #{})",
+                    orgId, electionId, count, attempt + 1);
+
+            safelyLogAudit(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally",
+                    "Recompute succeeded for election " + electionId + " produced " + count + " tallies");
+
+            return true;
+        } catch (AdvisoryLockNotAcquiredException lockEx) {
+            if (attempt >= MAX_RETRIES - 1) {
+                log.error("Recompute for {}/{} could not acquire advisory lock after {} attempts",
+                        orgId, electionId, MAX_RETRIES);
+                return false;
             }
+            long delayMillis = computeBackoffMillis(attempt);
+            log.warn("Advisory lock not acquired for {}/{}; scheduling retry #{} after {}ms",
+                    orgId, electionId, attempt + 2, delayMillis);
+            scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
+            return false;
         } catch (Exception ex) {
-            // transient DB/KMS error: retry up to MAX_RETRIES
-            if (attempt >= MAX_RETRIES) {
-                log.error("Recompute for {}/{} failed after {} attempts: {}", orgId, electionId, attempt + 1, ex.getMessage());
+            if (attempt >= MAX_RETRIES - 1) {
+                log.error("Recompute for {}/{} failed after {} attempts: {}",
+                        orgId, electionId, MAX_RETRIES, ex.getMessage(), ex);
+
+                safelyLogAudit(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally",
+                        "Recompute failed with error: " + ex.getMessage());
+
                 return false;
             } else {
                 long delayMillis = computeBackoffMillis(attempt);
-                log.warn("Recompute attempt #{} for {}/{} failed: {}. Retrying in {}ms", attempt + 1, orgId, electionId, ex.getMessage(), delayMillis);
-                scheduler.schedule(() -> tryRunWithRetries(orgId, electionId, actorUserId, attempt + 1),
-                        java.util.Date.from(java.time.Instant.now().plusMillis(delayMillis)));
-                return true; // scheduled retry
+                log.warn("Recompute attempt #{} for {}/{} failed: {}. Retrying in {}ms",
+                        attempt + 1, orgId, electionId, ex.getMessage(), delayMillis);
+                scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
+                return false;
             }
         }
     }
 
+    private void safelyLogAudit(UUID orgId, UUID actorUserId, ActivityType type,
+                                String entity, String description) {
+        try {
+            auditLogService.log(orgId, actorUserId, type, entity, description);
+        } catch (Exception e) {
+            log.error("Failed to write audit log for recompute: {}", e.getMessage(), e);
+        }
+    }
+
+//    private boolean tryRunWithRetries(java.util.UUID orgId, java.util.UUID electionId, java.util.UUID actorUserId, int attempt) {
+//        log.debug("Recompute attempt #{}/{} for {}/{}", attempt + 1, MAX_RETRIES, orgId, electionId);
+//
+//        try {
+//            // THIS is where the service is invoked. Ensure your service throws AdvisoryLockNotAcquiredException
+//            // when it cannot acquire the advisory lock.
+//            List<?> result = voteTallyService.recomputeForElection(orgId, electionId, actorUserId);
+//
+//            int count = result == null ? 0 : result.size();
+//            log.info("Recompute succeeded for org={} election={} produced {} tallies (attempt #{})", orgId, electionId, count, attempt + 1);
+//            auditLogService.log(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally", "Recompute succeeded for election " + electionId + " produced " + count + " tallies");
+//            return true;
+//        } catch (AdvisoryLockNotAcquiredException lockEx) {
+//            // If we've exhausted attempts, record failure. Otherwise schedule next attempt.
+//            if (attempt >= MAX_RETRIES - 1) {
+//                log.error("Recompute for {}/{} could not acquire advisory lock after {} attempts", orgId, electionId, MAX_RETRIES);
+//                return false;
+//            }
+//            long delayMillis = computeBackoffMillis(attempt);
+//            log.warn("Advisory lock not acquired for {}/{}; scheduling retry #{} after {}ms", orgId, electionId, attempt + 2, delayMillis);
+//            scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
+//            return false;
+//        } catch (Exception ex) {
+//            if (attempt >= MAX_RETRIES - 1) {
+//                log.error("Recompute for {}/{} failed after {} attempts: {}", orgId, electionId, MAX_RETRIES, ex.getMessage(), ex);
+//                auditLogService.log(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally", "Recompute failed with error: " + ex.getMessage());
+//                return false;
+//            } else {
+//                long delayMillis = computeBackoffMillis(attempt);
+//                log.warn("Recompute attempt #{} for {}/{} failed: {}. Retrying in {}ms", attempt + 1, orgId, electionId, ex.getMessage(), delayMillis);
+//                scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
+//                return false;
+//            }
+//        }
+//    }
+
+    private void scheduleRetry(java.util.UUID orgId, java.util.UUID electionId, java.util.UUID actorUserId, int nextAttempt, long delayMs) {
+        Instant runAt = Instant.now().plusMillis(delayMs);
+        scheduler.schedule(() -> {
+            tryRunWithRetries(orgId, electionId, actorUserId, nextAttempt);
+        }, runAt);
+    }
+
     private long computeBackoffMillis(int attempt) {
-        // exponential backoff with jitter
         long base = BASE_DELAY.toMillis() * (1L << Math.min(attempt, 10));
         long jitter = (long) (Math.random() * 200L);
         return Math.min(base + jitter, Duration.ofMinutes(5).toMillis());
     }
+
+
 }

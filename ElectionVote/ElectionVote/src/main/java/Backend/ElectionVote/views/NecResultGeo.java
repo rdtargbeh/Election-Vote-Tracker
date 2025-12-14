@@ -69,30 +69,29 @@ public class NecResultGeo {
      */
     @Column(name = "center_id", nullable = false)
     private UUID centerId;
-
     @Column(name = "center_code")
     private String centerCode;
-
     @Column(name = "center_name")
     private String centerName;
+
 
     /**
      * District information joined via polling_center → district.
      */
     @Column(name = "district_id")
     private UUID districtId;
-
     @Column(name = "district_name")
     private String districtName;
+
 
     /**
      * County information joined via district → county.
      */
     @Column(name = "county_id")
     private UUID countyId;
-
     @Column(name = "county_name")
     private String countyName;
+
 
     /**
      * Candidate votes stored as JSONB:

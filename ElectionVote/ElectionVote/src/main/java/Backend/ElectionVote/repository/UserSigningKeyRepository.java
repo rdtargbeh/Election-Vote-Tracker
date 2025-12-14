@@ -9,6 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserSigningKeyRepository extends JpaRepository<UserSigningKey, UUID> {
-    List<UserSigningKey> findByUser_UserIdOrderByCreatedAtDesc(UUID userId);
+
+    List<UserSigningKey> findByUser_UserIdOrderByDateCreatedDesc(UUID userId);
+
     Optional<UserSigningKey> findByKid(String kid);
+
+    List<UserSigningKey> findByUserUserIdOrderByDateCreatedDesc(UUID userId);
+
 }

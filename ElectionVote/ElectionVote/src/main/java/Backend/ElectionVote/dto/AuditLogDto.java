@@ -12,9 +12,13 @@ import lombok.Data;
 public class AuditLogDto {
     private UUID logId;
     private UUID orgId;
+    private String orgName;
     private UUID userId;
+    private String userName;
     private ActivityType activityType;
     private String entityAffected;
     private String actionDescription;
-    private LocalDateTime timestamp;
+    private LocalDateTime dateCreated;
+    private String metadata;
+
 }

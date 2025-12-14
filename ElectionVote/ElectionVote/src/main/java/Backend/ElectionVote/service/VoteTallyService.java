@@ -39,5 +39,4 @@ public interface VoteTallyService {
                                             UUID electionId);
 
 
-
 }

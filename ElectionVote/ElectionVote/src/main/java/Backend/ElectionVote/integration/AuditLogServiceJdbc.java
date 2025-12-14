@@ -4,6 +4,7 @@ import Backend.ElectionVote.dto.AuditLogDto;
 import Backend.ElectionVote.enums.ActivityType;
 import Backend.ElectionVote.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Primary;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -32,8 +33,10 @@ import java.util.*;
  * - Uses gen_random_uuid() for the log_id (Postgres pgcrypto). If unavailable, switch to server-side UUID generation in Java.
  */
 @Service
+@Primary
 @RequiredArgsConstructor
 public class AuditLogServiceJdbc implements AuditLogService {
+
 
     private final JdbcTemplate jdbc;
 
@@ -47,7 +50,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
                     .activityType(rs.getString("activity_type") != null ? ActivityType.valueOf(rs.getString("activity_type")) : null)
                     .entityAffected(rs.getString("entity_affected"))
                     .actionDescription(rs.getString("action_description"))
-                    .timestamp(rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null)
+                    .dateCreated(rs.getTimestamp("date_created") != null ? rs.getTimestamp("date_created").toLocalDateTime() : null)
                     .build();
         }
     };
@@ -57,7 +60,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
         // Attempt to insert and return created row using RETURNING (Postgres)
         try {
             String sql = "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) " +
-                    "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?) RETURNING log_id, org_id, user_id, activity_type, entity_affected, action_description, created_at";
+                    "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?) RETURNING log_id, org_id, user_id, activity_type, entity_affected, action_description, date_created";
             return jdbc.queryForObject(sql,
                     ROW_MAPPER,
                     orgId, userId, type == null ? null : type.name(), entity, description);
@@ -65,7 +68,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
             // Failsafe: if insert fails (pgcrypto missing etc.), try Java-side insert with generated UUID
             try {
                 UUID id = UUID.randomUUID();
-                String sql = "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description, created_at) " +
+                String sql = "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description, date_created) " +
                         "VALUES (?, ?, ?, ?, ?, ?, now())";
                 jdbc.update(sql, id, orgId, userId, type == null ? null : type.name(), entity, description);
                 // Build DTO to return using the correct builder property names
@@ -76,7 +79,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
                         .activityType(type)
                         .entityAffected(entity)
                         .actionDescription(description)
-                        .timestamp(LocalDateTime.now())
+                        .dateCreated(LocalDateTime.now())
                         .build();
                 return dto;
             } catch (Exception ex2) {
@@ -89,7 +92,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
                         .activityType(type)
                         .entityAffected(entity)
                         .actionDescription(description)
-                        .timestamp(LocalDateTime.now())
+                        .dateCreated(LocalDateTime.now())
                         .build();
             }
         }
@@ -137,17 +140,17 @@ public class AuditLogServiceJdbc implements AuditLogService {
         }
 
         // Determine sorting and pagination
-        String orderBy = " ORDER BY created_at DESC ";
+        String orderBy = " ORDER BY date_created DESC ";
         if (pageable != null && pageable.getSort() != null) {
             List<String> orderClauses = new ArrayList<>();
             for (Sort.Order o : pageable.getSort()) {
                 String prop = o.getProperty();
                 String col;
                 switch (prop) {
-                    case "timestamp": col = "created_at"; break;
+                    case "timestamp": col = "date_created"; break;
                     case "activityType": col = "activity_type"; break;
                     case "entityAffected": col = "entity_affected"; break;
-                    default: col = "created_at"; break;
+                    default: col = "date_created"; break;
                 }
                 orderClauses.add(col + " " + (o.isAscending() ? "ASC" : "DESC"));
             }
@@ -160,7 +163,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
         int size = (pageable == null) ? 20 : pageable.getPageSize();
         int offset = page * size;
 
-        String sql = "SELECT log_id, org_id, user_id, activity_type, entity_affected, action_description, created_at " +
+        String sql = "SELECT log_id, org_id, user_id, activity_type, entity_affected, action_description, date_created " +
                 "FROM audit_log " + where + orderBy + " LIMIT ? OFFSET ?";
 
         params.add(size);
@@ -170,4 +173,7 @@ public class AuditLogServiceJdbc implements AuditLogService {
 
         return new PageImpl<>(rows, PageRequest.of(page, size, pageable == null ? Sort.by(Sort.Direction.DESC, "timestamp") : pageable.getSort()), total);
     }
+
+
+
 }

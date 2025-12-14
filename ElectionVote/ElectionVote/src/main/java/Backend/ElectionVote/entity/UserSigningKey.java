@@ -57,14 +57,14 @@ public class UserSigningKey {
     private String algorithm;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "date_created", nullable = false, updatable = false)
+    private LocalDateTime dateCreated;
 
     @Column(name = "revoked", nullable = false)
     private boolean revoked = false;
 
-    @Column(name = "revoked_at")
-    private LocalDateTime revokedAt;
+    @Column(name = "date_revoked")
+    private LocalDateTime dateRevoked;
 
     @Column(name = "metadata", columnDefinition = "jsonb")
     private String metadata; // optional JSON metadata

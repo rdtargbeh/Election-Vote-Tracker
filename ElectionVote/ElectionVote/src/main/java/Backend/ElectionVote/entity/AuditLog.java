@@ -8,14 +8,22 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+
+
+@Entity
+@Table(name = "audit_log",
+        indexes = {
+                @Index(name = "idx_audit_log_org", columnList = "org_id"),
+                @Index(name = "idx_audit_log_user", columnList = "user_id"),
+                @Index(name = "idx_audit_log_type", columnList = "activity_type"),
+                @Index(name = "idx_audit_log_date", columnList = "date_created")
+        })
+
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-
-@Entity
-@Table(name = "audit_log")
 public class AuditLog {
 
     @Id
@@ -44,12 +52,16 @@ public class AuditLog {
     @Column(name = "action_description", columnDefinition = "text")
     private String actionDescription;
 
-    @Column(name = "timestamp")
-    private LocalDateTime timestamp;
+    // optional JSON metadata for structured details
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    private String metadata;
+
+    @Column(name = "date_created")
+    private LocalDateTime dateCreated;
 
     @PrePersist
     void prePersist() {
-        if (timestamp == null) timestamp = LocalDateTime.now();
+        if (dateCreated == null) dateCreated = LocalDateTime.now();
     }
 
 

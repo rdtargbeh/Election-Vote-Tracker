@@ -9,6 +9,12 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+
+/**
+ * Vote tally per candidate for an election/org.
+ */
+
+
 @Getter
 @Setter
 @AllArgsConstructor
@@ -67,6 +73,12 @@ public class VoteTally {
             foreignKey = @ForeignKey(name = "vote_tally_recomputed_by_fkey"))
     private SystemUser recomputedBy; // nullable if system job
 
+    @Column(name = "last_updated")
+    private LocalDateTime lastUpdated;
 
+    @PrePersist
+    public  void prePersist(){
+        if (lastUpdated == null) lastUpdated = LocalDateTime.now();
+    }
 
 }

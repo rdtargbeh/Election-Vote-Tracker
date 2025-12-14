@@ -23,4 +23,5 @@ public interface NECResultService {
     List<CandidateScopedTotalDto> byDistrictPerCandidate(UUID electionId, UUID countyId);
     List<CandidateDailyTotalDto> dailyByCandidate(UUID electionId);
 
+
 }

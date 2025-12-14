@@ -19,7 +19,7 @@ public class NECResultDto {
     private String pollingCenterName;
 
     // Candidate -> votes; serialized to jsonb in the entity
-    private Map<UUID, Integer> candidateVotes;
+    private Map<String, Integer> candidateVotes;
 
     private Integer totalRegisteredVoters;
     private Integer ballotsCast;

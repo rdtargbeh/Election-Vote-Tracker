@@ -19,11 +19,14 @@ public interface VoteSubmissionRepository
 
     boolean existsBySubmissionHash(String submissionHash);
 
+    Optional<VoteSubmission> findByIdempotencyKey(String idempotencyKey);
+
     List<VoteSubmission> findByOrganization_OrgIdAndElection_ElectionIdAndStatus(
             UUID orgId,
             UUID electionId,
             VoteStatus status
     );
+
 
     // helpful lookup patterns
     Optional<VoteSubmission> findFirstByOrganization_OrgIdAndElection_ElectionIdAndPollingCenter_CenterIdAndAgent_UserIdOrderBySubmissionTimeDesc(
@@ -31,7 +34,6 @@ public interface VoteSubmissionRepository
 
     Optional<VoteSubmission> findBySubmissionHash(String submissionHash);
 
-    Optional<VoteSubmission> findByIdempotencyKey(String idempotencyKey);
 
 
 }

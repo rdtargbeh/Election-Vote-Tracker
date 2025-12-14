@@ -28,7 +28,7 @@ import java.util.UUID;
 @Transactional
 public class AuditLogServiceImplementation implements AuditLogService {
 
-    private final AuditLogRepository repo;
+    private final AuditLogRepository auditLogRepository;
     private final OrganizationRepository orgRepo;
     private final SystemUserRepository userRepo;
     private final AuditLogMapper mapper = new AuditLogMapper();
@@ -47,8 +47,9 @@ public class AuditLogServiceImplementation implements AuditLogService {
         a.setEntityAffected(entity);
         a.setActionDescription(description);
         // timestamp set by @PrePersist
-        return mapper.toDTO(repo.save(a));
+        return mapper.toDTO(auditLogRepository.save(a));
     }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -61,6 +62,6 @@ public class AuditLogServiceImplementation implements AuditLogService {
                 .and(AuditLogSpecs.between(from, to))
                 .and(AuditLogSpecs.textSearch(q));
 
-        return repo.findAll(spec, pageable).map(mapper::toDTO);
+        return auditLogRepository.findAll(spec, pageable).map(mapper::toDTO);
     }
 }

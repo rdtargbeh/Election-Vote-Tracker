@@ -16,7 +16,6 @@ public class VoteTallyDto {
 
     private UUID electionId;
     private String electionName;
-//    private UUID submissionId;
 
     private UUID partyId;
     private String partyName;
@@ -29,4 +28,6 @@ public class VoteTallyDto {
 
     private LocalDateTime lastRecomputedAt;
     private UUID recomputedByUserId;
+
+    private LocalDateTime lastUpdated;
 }

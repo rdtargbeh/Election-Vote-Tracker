@@ -1,0 +1,30 @@
+package Backend.ElectionVote.dto;
+
+import Backend.ElectionVote.enums.ChangeType;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * DTO used to expose history entries for NEC results.
+ */
+@Data
+public class NecResultHistoryDto {
+    private UUID historyId;
+    private UUID resultId;
+    private UUID electionId;
+    private UUID centerId;
+    private Map<String, Integer> candidateVotes;
+    private Integer totalRegisteredVoters;
+    private Integer ballotsCast;
+    private Integer invalidBallots;
+    private Integer blankBallots;
+    private Integer rejectedBallots;
+    private Integer spoiledBallots;
+    private ChangeType changeType;
+    private UUID changedBy;
+    private LocalDateTime changedAt;
+    private String notes;
+}

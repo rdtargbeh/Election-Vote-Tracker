@@ -29,6 +29,7 @@ public class VoteTallyMapper {
                 .voteCount(v.getVoteCount())
                 .lastRecomputedAt(v.getLastRecomputedAt())
                 .recomputedByUserId(v.getRecomputedBy().getUserId())
+                .lastUpdated(v.getLastUpdated())
 
 //                .submissionId(v.getSubmission().getSubmissionId())
 
