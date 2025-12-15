@@ -75,8 +75,7 @@ public class VoteSubmission extends AuditBaseEntity {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "candidate_votes", nullable = false)
-    private Map<UUID, Integer> candidateVotes;
-
+    private Map<String, Integer> candidateVotes;
 
     @Column(name = "ballots_cast", nullable = false)
     private Integer ballotsCast;

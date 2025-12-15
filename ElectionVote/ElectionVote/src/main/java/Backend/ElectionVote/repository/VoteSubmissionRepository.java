@@ -27,6 +27,11 @@ public interface VoteSubmissionRepository
             VoteStatus status
     );
 
+    List<VoteSubmission> findByElection_ElectionIdAndStatusAndDateDeletedIsNull(
+            UUID electionId,
+            String status
+    );
+
 
     // helpful lookup patterns
     Optional<VoteSubmission> findFirstByOrganization_OrgIdAndElection_ElectionIdAndPollingCenter_CenterIdAndAgent_UserIdOrderBySubmissionTimeDesc(

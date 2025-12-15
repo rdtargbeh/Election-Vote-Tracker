@@ -6,22 +6,18 @@ import Backend.ElectionVote.entity.ImportBatch;
 import Backend.ElectionVote.entity.NecResultStaging;
 import Backend.ElectionVote.entity.PollingCenter;
 import Backend.ElectionVote.entity.SystemUser;
-import Backend.ElectionVote.mapper.NECResultMapper;
 import Backend.ElectionVote.repository.ImportBatchRepository;
 import Backend.ElectionVote.repository.NecResultStagingRepository;
 import Backend.ElectionVote.repository.PollingCenterRepository;
 import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.service.AuditLogService;
+import Backend.ElectionVote.service.BatchProcessingService;
 import Backend.ElectionVote.service.ImportBatchService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -41,9 +37,10 @@ public class ImportBatchServiceImplementation implements ImportBatchService {
     private final PollingCenterRepository centerRepo;
     private final SystemUserRepository userRepo;
     private final AuditLogService auditLogService;
-    private final JdbcTemplate jdbc;
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final NECResultMapper mapper = new NECResultMapper();
+    private final BatchProcessingService batchProcessingService;
+
+
+
 
     @Override
     public ImportBatchDto createBatch(ImportBatchDto dto) {
@@ -169,67 +166,34 @@ public class ImportBatchServiceImplementation implements ImportBatchService {
 
     @Override
     public int processBatch(UUID batchId, UUID actorUserId) {
-        List<NecResultStaging> rows = stagingRepo.findByBatchId(batchId).stream()
-                .filter(r -> Boolean.TRUE.equals(r.getValidated()) && !Boolean.TRUE.equals(r.getProcessed()))
-                .collect(Collectors.toList());
-        if (rows.isEmpty()) return 0;
+        // Ensure batch exists
+        ImportBatch batch = batchRepo.findById(batchId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Batch not found"));
 
-        SystemUser actor = null;
-        if (actorUserId != null) {
-            actor = userRepo.findById(actorUserId)
-                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Actor user not found"));
-        }
+        // Count validated & unprocessed staging rows that will be processed by the async worker
+        int toProcess = stagingRepo.findByBatchIdAndValidatedTrueAndProcessedFalse(batchId).size();
 
-        int processed = 0;
-        LocalDateTime now = LocalDateTime.now();
+        // Ensure batch metadata is up-to-date
+        int total = stagingRepo.findByBatchId(batchId).size();
+        batch.setRowCount(total);
+        batch.setProcessed(false); // mark as not yet fully processed
+        batchRepo.save(batch);
 
-        for (NecResultStaging s : rows) {
-            try {
-                // Call DB function publish_nec_result(p_staging_id, p_actor_id)
-                final UUID stagingId = s.getStagingId();
-                final UUID actorId = actorUserId;
-                jdbc.execute((Connection conn) -> {
-                    try (PreparedStatement ps = conn.prepareStatement("SELECT publish_nec_result(?, ?)")) {
-                        ps.setObject(1, stagingId);
-                        ps.setObject(2, actorId);
-                        ps.execute();
-                    }
-                    return null;
-                });
+        // Enqueue for asynchronous processing
+        batchProcessingService.enqueueBatch(batchId, actorUserId);
 
-                // Mark staging processed (DB function may have updated validated/is_published)
-                s.setProcessed(true);
-                s.setProcessedAt(now);
-                stagingRepo.save(s);
-
-                processed++;
-
-            } catch (Exception ex) {
-                // On error, annotate staging.validation_errors and continue
-                String prev = s.getValidationErrors() == null ? "" : s.getValidationErrors() + "; ";
-                s.setValidationErrors(prev + "promotion error: " + ex.getMessage());
-                stagingRepo.save(s);
-            }
-        }
-
-        // update import_batch counters and processed flag
-        batchRepo.findById(batchId).ifPresent(b -> {
-            int total = stagingRepo.findByBatchId(batchId).size();
-            int procCount = (int) stagingRepo.findByBatchId(batchId).stream().filter(NecResultStaging::getProcessed).count();
-            b.setRowCount(total);
-            b.setProcessed(procCount == total);
-            batchRepo.save(b);
-        });
-
+        // Audit the enqueue action
         try {
             auditLogService.logCreate(null, actorUserId, "ImportBatch",
-                    "Processed batch=" + batchId + " rows_processed=" + processed);
+                    "Enqueued batch=" + batchId + " rows_to_process=" + toProcess);
         } catch (Exception ex) {
-            // best-effort
+            // best-effort; do not fail the enqueue on audit errors
         }
 
-        return processed;
+        // Return number of rows that were queued (0 means nothing to do)
+        return toProcess;
     }
+
 
     private ImportBatchDto toDto(ImportBatch b) {
         if (b == null) return null;

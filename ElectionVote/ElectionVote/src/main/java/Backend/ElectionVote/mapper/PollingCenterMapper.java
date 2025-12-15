@@ -23,6 +23,8 @@ public class PollingCenterMapper {
                 .districtName(d != null ? d.getDistrictName() : null)
                 .countyId(c != null ? c.getCountyId() : null)
                 .countyName(c != null ? c.getCountyName() : null)
+                .latitude(pc.getLatitude())
+                .longitude(pc.getLongitude())
                 .build();
     }
 

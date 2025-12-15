@@ -45,7 +45,7 @@ public class VoteSubmissionMapper {
         String verifiedByName = v != null ? v.getFirstName() + " " + v.getLastName() : null;
 
         // candidateVotes now comes directly from the entity as a Map
-        Map<UUID, Integer> votesMap =
+        Map<String, Integer> votesMap =
                 s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap();
 
         int validVotes = votesMap.values().stream().mapToInt(Integer::intValue).sum();

@@ -9,7 +9,7 @@ import java.util.UUID;
 @Getter
 @Setter
 public class VoteSubmissionUpdateRequest {
-    private Map<UUID,Integer> candidateVotes;
+    private Map<String,Integer> candidateVotes;
     private Integer ballotsCast;
     private Integer invalidBallots;
     private Integer blankBallots;

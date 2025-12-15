@@ -17,7 +17,7 @@ public class VoteSubmissionCreateRequest {
     @NotNull private UUID placeId;
 
     @NotNull @NotEmpty
-    private Map<@NotNull UUID, @Min(0) Integer> candidateVotes; // candidateId -> votes
+    private Map<@NotNull String, @Min(0) Integer> candidateVotes; // candidateId -> votes
 
     @NotNull
     @Min(0) private Integer ballotsCast;

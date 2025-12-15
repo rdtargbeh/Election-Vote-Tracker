@@ -77,15 +77,10 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     private final OrganizationRepository orgRepo;
     private final ElectionRepository electionRepo;
     private final SystemUserRepository userRepo;
-    private final VoteTallyRepository voteTallyRepository;
-    private final VoteTallyService voteTallyService;
     private final NotificationService notificationService;
-
     private final PollingCenterRepository centerRepo;
     private final PollingPlaceRepository placeRepo;
     private final PollingPlaceAllocationRepository placeAllocationRepo;
-    private final PollingCenterAllocationRepository allocationRepo;
-
     private final FileUploadService fileUploadService;
     private final TallySheetRepository tallySheetRepository;
     private final AuditLogService auditLogService;
@@ -286,7 +281,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                         )
                         .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Polling place not allocated for this election"));
 
-                Map<UUID, Integer> mergedVotes =
+                Map<String, Integer> mergedVotes =
                         (req.getCandidateVotes() != null)
                                 ? req.getCandidateVotes()
                                 : (s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap());
@@ -555,7 +550,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
     }
 
     // ---------- helpers ----------
-    private static void validateTally(Map<UUID,Integer> votes, int invalid, int blank, int rejected, int spoiled,
+    private static void validateTally(Map<String,Integer> votes, int invalid, int blank, int rejected, int spoiled,
                                       int cast, int registered, Integer ballotsIssued) {
         long sumVotes = votes == null ? 0L : votes.values().stream().mapToLong(Integer::longValue).sum();
         validateTallyInternal(sumVotes, invalid, blank, rejected, spoiled, cast, registered, ballotsIssued);
@@ -585,7 +580,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                                               UUID centerId,
                                               UUID placeId,
                                               UUID agentId,
-                                              Map<UUID, Integer> votesMap,
+                                              Map<String, Integer> votesMap,
                                               int cast,
                                               int invalid,
                                               int blank,
@@ -688,9 +683,13 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
      * - Ensures candidate IDs exist in the candidates table.
      * - Enforces the MAX_CANDIDATE_KEYS limit.
      */
-    private void validateCandidateVotes(UUID orgId, UUID electionId, Map<UUID, Integer> candidateVotes, Integer ballotsCast) {
+    private void validateCandidateVotes(UUID orgId,
+                                        UUID electionId,
+                                        Map<String, Integer> candidateVotes,
+                                        Integer ballotsCast) {
+
         if (candidateVotes == null || candidateVotes.isEmpty()) {
-            // allow empty (no votes for candidates) but ensure ballots counts are consistent elsewhere
+            // Empty -> allowed; other checks (ballotsCast consistency) handled elsewhere
             return;
         }
 
@@ -699,39 +698,64 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         }
 
         // Validate key/value shapes
-        for (Map.Entry<UUID, Integer> e : candidateVotes.entrySet()) {
-            UUID cid = e.getKey();
+        for (Map.Entry<String, Integer> e : candidateVotes.entrySet()) {
+            String cid = e.getKey();
             Integer v = e.getValue();
-            if (cid == null) {
-                throw new ResponseStatusException(BAD_REQUEST, "candidateVotes contains null candidate id");
+
+            if (cid == null || cid.isBlank()) {
+                throw new ResponseStatusException(BAD_REQUEST, "candidateVotes contains null or blank candidate id");
             }
+
             if (v == null || v < 0) {
-                throw new ResponseStatusException(BAD_REQUEST, "candidateVotes for " + cid + " must be a non-negative integer");
+                throw new ResponseStatusException(
+                        BAD_REQUEST,
+                        "candidateVotes for candidate " + cid + " must be a non-negative integer"
+                );
             }
         }
 
-        // Ensure candidate IDs exist. This checks existence globally; if you have per-election candidate scoping,
-        // replace with a query that verifies candidate belongs to the specified election/org.
-        Set<UUID> ids = candidateVotes.keySet();
-        List<UUID> found = candidateRepository.findAllById(ids).stream()
+        // Convert string IDs to UUIDs for DB lookup
+        Set<String> ids = candidateVotes.keySet();
+        List<UUID> uuidIds;
+
+        try {
+            uuidIds = ids.stream()
+                    .map(UUID::fromString)
+                    .collect(Collectors.toList());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(BAD_REQUEST, "candidateVotes contains invalid UUID format");
+        }
+
+        // Ensure candidate IDs exist
+        List<UUID> found = candidateRepository.findAllById(uuidIds).stream()
                 .map(Candidate::getCandidateId)
                 .distinct()
                 .collect(Collectors.toList());
 
-        if (found.size() != ids.size()) {
+        if (found.size() != uuidIds.size()) {
             Set<UUID> foundSet = new HashSet<>(found);
-            Set<UUID> missing = ids.stream().filter(id -> !foundSet.contains(id)).collect(Collectors.toSet());
+            Set<UUID> missing = uuidIds.stream()
+                    .filter(id -> !foundSet.contains(id))
+                    .collect(Collectors.toSet());
+
             throw new ResponseStatusException(BAD_REQUEST, "Unknown candidate ids: " + missing);
         }
 
-        // Optional sanity: ensure total votes don't exceed ballotsCast (if provided)
+        // Optional sanity: ensure sum(candidate votes) <= ballotsCast
         if (ballotsCast != null) {
-            long totalVotes = candidateVotes.values().stream().mapToLong(Integer::longValue).sum();
+            long totalVotes = candidateVotes.values().stream()
+                    .mapToLong(Integer::longValue)
+                    .sum();
+
             if (totalVotes > ballotsCast) {
-                throw new ResponseStatusException(BAD_REQUEST, "Sum of candidate votes (" + totalVotes + ") exceeds ballotsCast (" + ballotsCast + ")");
+                throw new ResponseStatusException(
+                        BAD_REQUEST,
+                        "Sum of candidate votes (" + totalVotes + ") exceeds ballotsCast (" + ballotsCast + ")"
+                );
             }
         }
     }
+
 
     /**
      * Persist chain hash signature and update submission record.

@@ -176,9 +176,6 @@
 			<version>2.20.96</version> <!-- pick a recent stable v2 release -->
 		</dependency>
 
-<!--		 TEST DEPENDENCIES-->
-
-		<!-- Testcontainers Postgres -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>postgresql</artifactId>
@@ -186,7 +183,6 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Testcontainers JUnit 5 integration -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>junit-jupiter</artifactId>
@@ -194,12 +190,17 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- Awaitility for async assertions -->
 		<dependency>
 			<groupId>org.awaitility</groupId>
 			<artifactId>awaitility</artifactId>
 			<version>4.2.0</version>
 			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+			<version>3.1.8</version>
 		</dependency>
 
 

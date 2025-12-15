@@ -40,7 +40,7 @@ public class VoteSubmissionDto {
 
     @JsonIgnore
     private String candidateVotesJson; // JSON string (candidateId -> votes)
-    private Map<UUID, Integer> candidateVotes;
+    private Map<String, Integer> candidateVotes;
 
     private Integer ballotsCast;
     private Integer invalidBallots;

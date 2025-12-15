@@ -28,4 +28,17 @@ public class AsyncConfig {
         t.initialize();
         return t;
     }
+
+
+    @Bean(name = "batchTaskExecutor")
+    public Executor batchTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);   // tune per environment
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("batch-exec-");
+        executor.initialize();
+        return executor;
+    }
+
 }

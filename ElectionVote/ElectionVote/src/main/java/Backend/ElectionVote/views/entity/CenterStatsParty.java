@@ -1,6 +1,8 @@
-package Backend.ElectionVote.views;
+package Backend.ElectionVote.views.entity;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
 
 import java.math.BigDecimal;
@@ -17,6 +19,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "v_center_stats_party")
 @Immutable
+@Getter
+@NoArgsConstructor
 public class CenterStatsParty {
 
     @EmbeddedId
@@ -52,88 +56,12 @@ public class CenterStatsParty {
     @Column(name = "invalid_total")
     private Integer invalidTotal;
 
-    @Column(name = "turnout_pct")
+    @Column(name = "turnout_pct", precision = 10, scale = 6)
     private BigDecimal turnoutPct;
 
-    @Column(name = "invalid_pct")
+    @Column(name = "invalid_pct", precision = 10, scale = 6)
     private BigDecimal invalidPct;
 
-    protected CenterStatsParty() {}
-
-    public CenterStatsParty(CenterStatsPartyId id) {
-        this.id = id;
-    }
-
-    // EmbeddedId accessor
-    public CenterStatsPartyId getId() {
-        return id;
-    }
-
-    public void setId(CenterStatsPartyId id) {
-        this.id = id;
-    }
-
-    // Convenience getters mapping to embedded id parts
-    public UUID getOrgId() {
-        return id != null ? id.getOrgId() : null;
-    }
-
-    public UUID getElectionId() {
-        return id != null ? id.getElectionId() : null;
-    }
-
-    public UUID getCenterId() {
-        return id != null ? id.getCenterId() : null;
-    }
-
-    // Other getters
-    public String getCenterCode() {
-        return centerCode;
-    }
-
-    public String getCenterName() {
-        return centerName;
-    }
-
-    public UUID getDistrictId() {
-        return districtId;
-    }
-
-    public String getDistrictName() {
-        return districtName;
-    }
-
-    public UUID getCountyId() {
-        return countyId;
-    }
-
-    public String getCountyName() {
-        return countyName;
-    }
-
-    public Integer getRegisteredVoters() {
-        return registeredVoters;
-    }
-
-    public Integer getBallotsCast() {
-        return ballotsCast;
-    }
-
-    public Integer getValidVotes() {
-        return validVotes;
-    }
-
-    public Integer getInvalidTotal() {
-        return invalidTotal;
-    }
-
-    public BigDecimal getTurnoutPct() {
-        return turnoutPct;
-    }
-
-    public BigDecimal getInvalidPct() {
-        return invalidPct;
-    }
 
     @Override
     public String toString() {
