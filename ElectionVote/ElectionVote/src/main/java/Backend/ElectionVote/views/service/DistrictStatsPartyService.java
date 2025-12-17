@@ -7,6 +7,7 @@ import Backend.ElectionVote.views.mapper.DistrictStatsPartyMapper;
 import Backend.ElectionVote.views.repo.DistrictStatsPartyRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,20 @@ public class DistrictStatsPartyService{
     private final DistrictStatsPartyMapper mapper = new DistrictStatsPartyMapper();
 
    // metrics
-    private final Counter requestCounter = Counter.builder("api.stats.districts.requests").description("Requests for district stats").register(meterRegistry);
+//    private final Counter requestCounter = Counter.builder("api.stats.districts.requests")
+//           .description("Requests for district stats").register(meterRegistry);
+
+
+
+    private Counter requestCounter;
+
+    @PostConstruct
+    void initMetrics() {
+        this.requestCounter = Counter.builder("api.stats.districts.requests")
+                .description("Requests for district stats")
+                .register(meterRegistry);
+    }
+
 
     /**
      * Cacheable: caches pages per org/election/county/district/page/size/sort.
@@ -48,8 +62,10 @@ public class DistrictStatsPartyService{
      */
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "districtStatsParty", key = "T(java.lang.String).valueOf(#orgId) + ':' + #electionId + ':' + (#countyId==null?'':#countyId) + ':' + (#districtId==null?'':#districtId) + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort")
+    @Cacheable(value = "districtStatsParty", key = "T(java.lang.String).valueOf(#orgId) + ':' + #electionId + ':' + " +
+            "(#countyId==null?'':#countyId) + ':' + (#districtId==null?'':#districtId) + ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort")
     public Page<DistrictStatsPartyDto> listDistrictStats(UUID orgId, UUID electionId, UUID countyId, UUID districtId, Pageable pageable) {
+
         requestCounter.increment();
 
         log.debug("listDistrictStats called orgId={} electionId={} countyId={} districtId={} page={} size={}",
