@@ -3,9 +3,14 @@ package Backend.ElectionVote.service.implement;
 import Backend.ElectionVote.dto.*;
 import Backend.ElectionVote.entity.PollingCenterAllocation;
 import Backend.ElectionVote.mapper.PollingCenterAllocationMapper;
-import Backend.ElectionVote.repository.*;
+
+import Backend.ElectionVote.repository.ElectionRepository;
+import Backend.ElectionVote.repository.NECResultRepository;
+import Backend.ElectionVote.repository.PollingCenterAllocationRepository;
+import Backend.ElectionVote.repository.PollingCenterRepository;
 import Backend.ElectionVote.service.PollingCenterAllocationService;
 import Backend.ElectionVote.utility.PollingCenterAllocationSpecs;
+import Backend.ElectionVote.views.repo.NecResultGeoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

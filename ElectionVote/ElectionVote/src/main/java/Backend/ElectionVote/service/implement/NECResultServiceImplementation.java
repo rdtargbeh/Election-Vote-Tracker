@@ -2,12 +2,13 @@ package Backend.ElectionVote.service.implement;
 
 import Backend.ElectionVote.controller.NECOverallTotalsDto;
 import Backend.ElectionVote.dto.*;
-import Backend.ElectionVote.entity.*;
+import Backend.ElectionVote.entity.NECResult;
 import Backend.ElectionVote.mapper.NECResultMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.NECResultService;
 import Backend.ElectionVote.utility.NECResultSpecs;
-import Backend.ElectionVote.views.NecResultGeo;
+import Backend.ElectionVote.views.entity.NecResultGeo;
+import Backend.ElectionVote.views.repo.NecResultGeoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;

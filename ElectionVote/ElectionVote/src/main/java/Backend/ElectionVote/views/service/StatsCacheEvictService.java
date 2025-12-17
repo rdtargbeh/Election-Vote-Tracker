@@ -40,16 +40,23 @@ public class StatsCacheEvictService {
 
     // Keep this in sync with @Cacheable value names used across services
     private static final String[] CACHE_NAMES = new String[] {
+            "candidateCenterStatsOfficial",
+            "candidateDistrictStatsOfficial",
+            "candidateCountyStatsOfficial",
             "candidateCenterStatsParty",
             "candidateDistrictStatsParty",
             "candidateCountyStatsParty",
             "candidateElectionStatsParty",
+            "candidateCenterStatsParty",
             "centerStatsParty",
+            "centerStatsOfficial",
             "districtStatsParty",
+            "districtStatsOfficial",
             "countyStatsParty",
-            "electionStatsParty"
+            "countyStatsOfficial",
+            "electionStatsParty",
+            "electionStatsOfficial"
     };
-
 
     /**
      * Evict all entries from all stats caches. Simple and safe; use when writes affect many keys
@@ -120,6 +127,7 @@ public class StatsCacheEvictService {
         }
     }
 
+
     /**
      * Evict cache entries related to a specific org + election + center.
      * Useful when polling_center_allocation or polling_center rows change for a center.
@@ -162,6 +170,44 @@ public class StatsCacheEvictService {
         }
     }
 
+
+    @Transactional
+    public void evictByElection(UUID electionId) {
+        Objects.requireNonNull(electionId, "electionId is required");
+        final String prefix = electionId.toString() + ":"; // matches services that use electionId as first key segment
+
+        log.debug("Evicting stats caches for election prefix={}", prefix);
+        for (String cacheName : CACHE_NAMES) {
+            org.springframework.cache.Cache c = cacheManager.getCache(cacheName);
+            if (c == null) continue;
+            try {
+                Object nativeCache = c.getNativeCache();
+                if (nativeCache instanceof com.github.benmanes.caffeine.cache.Cache) {
+                    ConcurrentMap<Object, Object> map = ((com.github.benmanes.caffeine.cache.Cache<Object, Object>) nativeCache).asMap();
+                    Set<Object> keys = map.keySet();
+                    for (Object k : keys) {
+                        if (k instanceof String && ((String) k).startsWith(prefix)) {
+                            log.trace("Evicting key {} from cache {}", k, cacheName);
+                            map.remove(k);
+                        }
+                    }
+                } else {
+                    // Fallback: clear whole cache (safe but heavier)
+                    log.debug("Cache '{}' does not expose Caffeine native cache; clearing whole cache as fallback", cacheName);
+                    c.clear();
+                }
+            } catch (Exception ex) {
+                log.warn("Failed targeted eviction for cache '{}': {}, clearing whole cache as fallback", cacheName, ex.getMessage());
+                try {
+                    c.clear();
+                } catch (Exception e) {
+                    log.error("Failed to clear cache '{}' during fallback eviction: {}", cacheName, e.getMessage());
+                }
+            }
+        }
+    }
+
+
     // Helper: try a best-effort removal of entries if clear() isn't available or fails
     private void tryEvictAllEntriesFallback(org.springframework.cache.Cache c) {
         try {
@@ -175,4 +221,6 @@ public class StatsCacheEvictService {
             log.debug("Fallback eviction failed: {}", ex.getMessage());
         }
     }
+
+
 }
