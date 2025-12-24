@@ -25,17 +25,6 @@ public class PlatformAdminController {
     private final PartyService partyService;
 
 
-    /**
-     * Create a new organization (tenant).
-     * Only SYSTEM_ADMIN (platform admin) can do this.
-     */
-    @PostMapping("/organizations")
-    @ResponseStatus(HttpStatus.CREATED)
-    public OrganizationDto createOrganization(@RequestBody @Valid OrganizationCreateRequest req) {
-//        authz.requireNecAdminOrPlatformAdmin(); // NEC_ADMIN or SYSTEM_ADMIN
-        authz.requirePlatformAdmin(); // uses TenantContext / token to ensure SYSTEM_ADMIN
-        return organizationService.create(req);
-    }
 
 
     /**
@@ -79,7 +68,6 @@ public class PlatformAdminController {
      *
      * @param req Party creation request payload
      * @return Created Party DTO with HTTP 201 (Created)
-     * @throws AccessDeniedException if the caller is not SYSTEM_ADMIN
      * @throws IllegalArgumentException if party name or abbreviation already exists
      */
     @PostMapping("/party")
@@ -150,6 +138,7 @@ public class PlatformAdminController {
         authz.requirePlatformAdmin();
         organizationService.setActive(orgId, active);
     }
+
 
     // 8a2503cb-8e62-49f9-9c17-4735661338f0   up
     // 6c12f086-ae4a-464c-82d0-cb76822bcbaf  cdc

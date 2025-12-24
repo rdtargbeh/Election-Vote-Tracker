@@ -47,6 +47,9 @@ public class SystemUser extends BaseAuditedEntity {
     @Column(name = "user_name", nullable = false, unique = true, length = 30)
     private String userName;
 
+    @Column(name = "position", length = 50)
+    private String position;
+
     @Column(name = "email", nullable = false, unique = true, length = 50)
     private String email;
 
@@ -122,13 +125,26 @@ public class SystemUser extends BaseAuditedEntity {
     @Column(name = "date_updated")
     private LocalDateTime dateUpdated;
 
-
     /**
      * New: signingKeyId - optional reference to an external signing key id for this user.
      * This is useful when users sign submissions or we record which key id produced signatures.
      */
     @Column(name = "signing_key_id")
     private UUID signingKeyId;
+
+    /**
+     * Profile photo support
+     *
+     * - profileImageUrl: optional text URL (CDN or direct storage link)
+     * - profileImageUpload: optional relation to file_upload.upload_id (re-uses file storage)
+     */
+    @Column(name = "profile_image_url", columnDefinition = "text")
+    private String profileImageUrl;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "profile_image_upload_id", foreignKey = @ForeignKey(name = "fk_user_profile_upload"))
+    private FileUpload profileImageUpload;
+
 
     // Convenience helper
     @JsonIgnore

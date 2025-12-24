@@ -53,6 +53,8 @@ public class FileUploadServiceImplementation implements FileUploadService {
     private final ObserverReportRepository observerRepo;       // guard when related_table=observer_report
     private final ChatMessageRepository chatRepo;              // guard when related_table=chat_message
 
+    private static final String RELATED_TABLE_SUBMISSION = "vote_submission";
+
     private final FileUploadMapper mapper = new FileUploadMapper();
 
 
@@ -67,7 +69,6 @@ public class FileUploadServiceImplementation implements FileUploadService {
     private int maxFilesPerRequest;
 
     private Set<String> allowedMimeTypes;
-
     private Set<String> getAllowedMimeTypes() {
         if (allowedMimeTypes == null) {
             allowedMimeTypes = new HashSet<>();
@@ -200,6 +201,38 @@ public class FileUploadServiceImplementation implements FileUploadService {
         maybeMirrorToTallySheet(saved);
         return mapper.toDTO(saved);
     }
+
+    /**
+     * Create a submission, and upload associated files atomically in a single transaction.
+     * If any file fails to upload, the submission is rolled back entirely.
+     *
+     * @param submission The submission entity to create.
+     * @param files      List of files to upload alongside the submission.
+     */
+    @Transactional
+    public void createSubmissionWithFiles(VoteSubmission submission, List<MultipartFile> files, UUID uploaderId) {
+        log.info("Bundling submission creation and files upload into a transaction.");
+        Organization org = orgRepo.findById(submission.getOrganization().getOrgId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found."));
+        SystemUser uploader = userRepo.findById(uploaderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Uploader not found."));
+
+        // Save submission first
+        VoteSubmission savedSubmission = submissionRepo.save(submission);
+
+        // Upload files atomically
+        for (MultipartFile file : files) {
+            FileUploadCreateRequest meta = new FileUploadCreateRequest();
+            meta.setRelatedTable(RELATED_TABLE_SUBMISSION);
+            meta.setRelatedId(savedSubmission.getSubmissionId());
+            meta.setOrgId(org.getOrgId());
+            meta.setFileType(FileType.TALLY_SHEET);
+            uploadMultipart(meta, file, uploaderId);
+        }
+
+        log.info("Submission and files committed successfully for submissionId={}", savedSubmission.getSubmissionId());
+    }
+
 
     @Override
     @Transactional(readOnly = true)
@@ -375,6 +408,7 @@ public class FileUploadServiceImplementation implements FileUploadService {
         return MediaType.APPLICATION_OCTET_STREAM_VALUE;
     }
 
+
     private static Map<String, Object> mergedTags(Map<String, Object> base, String original, String stored) {
         Map<String, Object> t = new HashMap<>(base);
         t.putIfAbsent("original_name", original);
@@ -416,6 +450,7 @@ public class FileUploadServiceImplementation implements FileUploadService {
             return null;
         }
     }
+
 
     private FileUpload persistWithConflictHandling(FileUpload f) {
         try {
@@ -478,6 +513,85 @@ public class FileUploadServiceImplementation implements FileUploadService {
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported related_table: " + table);
         }
         // DB triggers (trg_fu_guard_dispatch) will double-check this too.
+    }
+
+
+    /**
+     * Validates and uploads multiple files atomically.
+     * If any file fails, the transaction is rolled back, leaving no traces of partially uploaded files.
+     *
+     * @param files       List of files to upload.
+     * @param org         Organization that owns the files.
+     * @param uploader    User uploading the files.
+     * @param relatedTable Table associated with the files.
+     * @param relatedId   ID of the entity in the associated table.
+     */
+    private void uploadFilesAtomic(List<MultipartFile> files, Organization org, SystemUser uploader, String relatedTable, UUID relatedId) {
+        if (files == null || files.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Files are required for upload");
+        }
+
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File cannot be empty: " + file.getOriginalFilename());
+            }
+
+            if (file.getSize() > maxFileSizeBytes) {
+                throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds maximum allowed size: " + file.getOriginalFilename());
+            }
+
+            String contentType = safeContentType(file.getContentType(), file.getOriginalFilename());
+            if (!getAllowedMimeTypes().contains(contentType.toLowerCase(Locale.ROOT))) {
+                throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "File content type not allowed: " + contentType);
+            }
+
+            try {
+                uploadSingleFile(org, uploader, file, relatedTable, relatedId, contentType);
+            } catch (Exception e) {
+                log.error("File upload failed during transaction: relatedTable={}, relatedId={}, file={}", relatedTable, relatedId,
+                        file.getOriginalFilename(), e);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed: " + file.getOriginalFilename(), e);
+            }
+        }
+    }
+
+    /**
+     * Validates and uploads a single file.
+     *
+     * @param org         Organization that owns the file.
+     * @param uploader    User uploading the file.
+     * @param file        The file to upload.
+     * @param relatedTable Table associated with the file.
+     * @param relatedId   ID of the entity in the associated table.
+     * @param contentType Validated MIME type of the file.
+     */
+    private void uploadSingleFile(Organization org, SystemUser uploader, MultipartFile file, String relatedTable, UUID relatedId, String contentType) throws IOException {
+        String sha256 = safeSha256(file);
+        if (sha256 != null && fileUploadRepository.existsActiveByOrgAndSha(org.getOrgId(), sha256)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate file for organization: " + file.getOriginalFilename());
+        }
+
+        String originalName = Objects.requireNonNullElse(file.getOriginalFilename(), "unknown.bin");
+        String uniqueName = UUID.randomUUID() + "-" + originalName;
+        String fileUrl;
+
+        try (InputStream inputStream = file.getInputStream()) {
+            fileUrl = storage.store(relatedTable, uniqueName, inputStream, file.getSize(), contentType);
+        }
+
+        FileUpload fileUpload = new FileUpload();
+        fileUpload.setOrganization(org);
+        fileUpload.setUploadedBy(uploader);
+        fileUpload.setRelatedTable(relatedTable);
+        fileUpload.setRelatedId(relatedId);
+        fileUpload.setFileType(FileType.TALLY_SHEET); // Adjust file type logic if necessary.
+        fileUpload.setFileUrl(fileUrl);
+        fileUpload.setMimeType(contentType);
+        fileUpload.setSha256(sha256);
+        fileUploadRepository.save(fileUpload);
+
+        log.debug("Uploaded file: relatedTable={}, relatedId={}, file={}, url={}",
+                relatedTable, relatedId, file.getOriginalFilename(), fileUrl);
     }
 
 

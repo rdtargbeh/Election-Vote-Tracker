@@ -4,22 +4,31 @@ import Backend.ElectionVote.dto.UserCreateRequest;
 import Backend.ElectionVote.dto.UserDto;
 import Backend.ElectionVote.dto.UserUpdateRequest;
 import Backend.ElectionVote.entity.*;
+import Backend.ElectionVote.enums.DeliveryMethod;
+import Backend.ElectionVote.enums.NotificationPriority;
+import Backend.ElectionVote.enums.NotificationType;
 import Backend.ElectionVote.enums.RoleName;
 import Backend.ElectionVote.mapper.UserMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.security.CurrentUserProvider;
+import Backend.ElectionVote.service.AuditLogService;
+import Backend.ElectionVote.service.NotificationService;
 import Backend.ElectionVote.service.SystemUserService;
 import Backend.ElectionVote.utility.ChangePasswordRequest;
 import Backend.ElectionVote.utility.QueryUtils;
 import Backend.ElectionVote.utility.TenantContext;
 import Backend.ElectionVote.utility.UserSearchRequest;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
@@ -41,15 +50,19 @@ public class SystemUserServiceImplementation implements SystemUserService {
     private final CountyRepository countyRepository;
     private final OrganizationRepository organizationRepository;
     private final OrgMembershipRepository memberships;
+    private final FileUploadRepository fileUploadRepository;
+    private final AuditLogService auditLogService;
+    private final NotificationService notificationService;
     private final PasswordEncoder encoder;
     private final OrgMembershipRepository orgMembershipRepository;
     private final UserMapper mapper; // make this a @Component or MapStruct @Mapper(componentModel="spring")
     private final CurrentUserProvider currentUserProvider;
 
     private final AuthorizationService authz;
+    private static final Logger log = LoggerFactory.getLogger(VoteSubmissionServiceImplementation.class);
+
 
     /* ======================= CREATE ======================= */
-
 
     @Override
     @Transactional
@@ -92,20 +105,71 @@ public class SystemUserServiceImplementation implements SystemUserService {
         // 6) Neutral user (no party, no county yet)
         String encodedPassword = encoder.encode(req.getPassword());
 
+
+        // Resolve optional profile image upload (preferred over a raw URL)
+        FileUpload profileImageUpload = null;
+        if (req.getProfileImageUploadId() != null) {
+            profileImageUpload = fileUploadRepository.findById(req.getProfileImageUploadId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image upload not found"));
+        }
+
         SystemUser entity = mapper.toEntity(
                 req,
                 role,
                 null,          // party
                 null,          // county
                 defaultOrg,
-                encodedPassword
+                encodedPassword,
+                profileImageUpload
         );
+
         SystemUser saved = systemUserRepository.save(entity);
 
         // 7) Add user to org_membership for THIS tenant
         ensureMembership(tenant.getOrgId(), saved.getUserId(), role.getRoleName().name());
 
-        return toDto(saved);
+        return mapper.toDTO(saved);
+    }
+
+
+    /* ======================= UPDATE ======================= */
+
+    @Override
+    @Transactional
+    public UserDto updateInTenant(UUID userId, UserUpdateRequest req) {
+        UUID orgId = requireTenant();
+        SystemUser u = loadTenantUser(orgId, userId);
+
+        if (req.getEmail() != null && !u.getEmail().equalsIgnoreCase(req.getEmail())) {
+            ensureUniqueEmail(req.getEmail(), u.getUserId());
+        }
+        if (req.getUserName() != null && !u.getUserName().equalsIgnoreCase(req.getUserName())) {
+            ensureUniqueUsername(req.getUserName(), u.getUserId());
+        }
+
+        FileUpload profileImageUpload = null;
+        if (req.getProfileImageUploadId() != null) {
+            profileImageUpload = fileUploadRepository.findById(req.getProfileImageUploadId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image upload not found"));
+        }
+
+        // ✅ IMPORTANT: pass profileImageUpload
+        mapper.applyUpdate(req, u, profileImageUpload);
+
+        if (req.getRoleName() != null) {
+            UserRole role = loadRole(req.getRoleName());
+            if (role.getRoleName() == RoleName.ADMIN && !callerIsPlatformAdmin()) {
+                throw new IllegalArgumentException("Not allowed to assign ADMIN within a tenant");
+            }
+            u.setRole(role);
+            syncMembershipRole(orgId, userId, role.getRoleName().name());
+        }
+
+        if (req.getPartyId() != null) u.setParty(loadParty(req.getPartyId()));
+        if (req.getAssignedCountyId() != null) u.setAssignedCounty(loadCounty(req.getAssignedCountyId()));
+        if (req.getDefaultOrgId() != null) u.setDefaultOrg(loadOrg(req.getDefaultOrgId()));
+
+        return mapper.toDTO(u);
     }
 
 
@@ -157,6 +221,13 @@ public class SystemUserServiceImplementation implements SystemUserService {
 
         String encoded = encoder.encode(req.getPassword());
 
+        // Resolve optional profile image upload (preferred over URL)
+        FileUpload profileImageUpload = null;
+        if (req.getProfileImageUploadId() != null) {
+            profileImageUpload = fileUploadRepository.findById(req.getProfileImageUploadId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image upload not found"));
+        }
+
         // Platform user: no party, county, or default org.
         SystemUser entity = mapper.toEntity(req, baseRole, null, null, null, encoded);
 
@@ -171,7 +242,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
         SystemUser saved = systemUserRepository.save(entity);
 
         // NOTE: no OrgMembership is created for platform admins.
-        return toDto(saved);
+        return mapper.toDTO(saved);
     }
 
 
@@ -230,7 +301,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
         orgMembershipRepository.save(membership);
 
         // 7) Return updated DTO
-        return toDto(user);
+        return mapper.toDTO(user);
     }
 
 
@@ -245,8 +316,9 @@ public class SystemUserServiceImplementation implements SystemUserService {
                 && !memberships.existsByOrganization_OrgIdAndUser_UserId(orgId, userId)) {
             return Optional.empty();
         }
-        return systemUserRepository.findById(userId).map(this::toDto);
+        return systemUserRepository.findById(userId).map(mapper::toDTO);
     }
+
 
     @Override
     public Page<UserDto> searchInTenant(UserSearchRequest req, Pageable pageable) {
@@ -258,47 +330,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
                         req != null ? req.getActive() : null,
                         pageable
                 )
-                .map(this::toDto);
-    }
-
-    /* ======================= UPDATE ======================= */
-
-    @Override
-    @Transactional
-    public UserDto updateInTenant(UUID userId, UserUpdateRequest req) {
-        UUID orgId = requireTenant();
-        SystemUser u = loadTenantUser(orgId, userId); // respects admin bypass
-
-        if (req.getEmail() != null && !u.getEmail().equalsIgnoreCase(req.getEmail())) {
-            ensureUniqueEmail(req.getEmail(), u.getUserId());
-        }
-        if (req.getUserName() != null && !u.getUserName().equalsIgnoreCase(req.getUserName())) {
-            ensureUniqueUsername(req.getUserName(), u.getUserId());
-        }
-
-        mapper.applyUpdate(req, u);
-
-        if (req.getRoleName() != null) {
-            UserRole role = loadRole(req.getRoleName());
-            if (role.getRoleName() == RoleName.ADMIN && !callerIsPlatformAdmin()) {
-                throw new IllegalArgumentException("Not allowed to assign ADMIN within a tenant");
-            }
-            u.setRole(role);
-            syncMembershipRole(orgId, userId, role.getRoleName().name());
-        }
-
-        // NOTE: with current DTO shape, null means “not provided”, so you can set but not clear.
-        if (req.getPartyId() != null) {
-            u.setParty(loadParty(req.getPartyId()));
-        }
-        if (req.getAssignedCountyId() != null) {
-            u.setAssignedCounty(loadCounty(req.getAssignedCountyId()));
-        }
-        if (req.getDefaultOrgId() != null) {
-            u.setDefaultOrg(loadOrg(req.getDefaultOrgId()));
-        }
-
-        return toDto(u);
+                 .map(mapper::toDTO);
     }
 
     /* ======================= FLAGS ======================= */

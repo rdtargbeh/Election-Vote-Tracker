@@ -1,0 +1,97 @@
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <style>
+        body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 12px; margin: 24px; }
+        .header { display:flex; justify-content: space-between; align-items: center; }
+        .logo { width: 120px; }
+        .title { text-align: center; font-size: 18px; font-weight: bold; }
+        .meta { font-size: 10px; color: #555; text-align: right; }
+        .metrics { margin-top: 12px; display:flex; gap:16px; }
+        .metric { border:1px solid #ddd; padding:8px; flex:1; text-align:center; }
+        table { width:100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border:1px solid #ddd; padding:6px; font-size: 11px; }
+        .footer { font-size: 10px; color: #777; margin-top: 20px; text-align:center; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="logo">
+        <img th:if="${logoDataUri}" th:src="${logoDataUri}" style="max-width:120px; max-height:60px;" alt="logo"/>
+    </div>
+    <div class="title">
+        <div th:text="${reportTitle}">Election Report</div>
+        <div th:text="${subtitle}" style="font-size:12px; color:#444;"></div>
+    </div>
+    <div class="meta">
+        <div>Snapshot: <span th:text="${snapshotId}"></span></div>
+        <div>Requested by: <span th:text="${requestedBy}"></span></div>
+        <div th:text="${requestedAt}"></div>
+    </div>
+</div>
+
+<hr/>
+
+<div class="metrics">
+    <div class="metric">
+        <div>Total ballots cast</div>
+        <div style="font-weight:bold; font-size:16px;" th:text="${totals.ballotsCast}">0</div>
+    </div>
+    <div class="metric">
+        <div>Total valid votes</div>
+        <div style="font-weight:bold; font-size:16px;" th:text="${totals.totalValidVotes}">0</div>
+    </div>
+    <div class="metric">
+        <div>Total invalid votes</div>
+        <div style="font-weight:bold; font-size:16px;" th:text="${totals.totalInvalidVotes}">0</div>
+    </div>
+    <div class="metric">
+        <div>Turnout %</div>
+        <div style="font-weight:bold; font-size:16px;" th:text="${totals.turnoutPct}">0%</div>
+    </div>
+</div>
+
+<h3>Top Candidates</h3>
+<table>
+    <thead>
+    <tr><th>#</th><th>Candidate</th><th>Party</th><th>Votes</th><th>Pct</th></tr>
+    </thead>
+    <tbody>
+    <tr th:each="r,iter : ${topCandidates}">
+        <td th:text="${iter.index + 1}">1</td>
+        <td th:text="${r.candidate_name}">Candidate X</td>
+        <td th:text="${r.party_name}">Party</td>
+        <td th:text="${r.candidate_votes}">0</td>
+        <td th:text="${r.voteSharePct}">0%</td>
+    </tr>
+    </tbody>
+</table>
+
+<div th:if="${sampleRows != null}">
+    <h3>Sample Rows</h3>
+    <table>
+        <thead>
+        <tr>
+            <th>Center</th><th>Candidate</th><th>Votes</th><th>Valid Votes</th><th>Ballots Cast</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${sampleRows}">
+            <td th:text="${r.center_name}">Center</td>
+            <td th:text="${r.candidate_name}">Candidate</td>
+            <td th:text="${r.candidate_votes}">0</td>
+            <td th:text="${r.center_valid_votes}">0</td>
+            <td th:text="${r.ballots_cast}">0</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="footer">
+    <div>Generated at <span th:text="${generatedAt}"></span></div>
+    <div>Download full data: <a th:href="${downloadUrl}" th:text="${downloadUrl}">download</a></div>
+</div>
+</body>
+</html>

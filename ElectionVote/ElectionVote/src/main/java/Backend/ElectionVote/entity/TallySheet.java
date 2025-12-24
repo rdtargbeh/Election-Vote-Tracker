@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.Type;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -51,6 +54,7 @@ public class TallySheet {
     private LocalDateTime lastUpdated;
 
     // Store JSONB as String for now (can switch to Map<String,Object> later)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "ocr_extracted", columnDefinition = "jsonb")
     private String ocrExtracted;
 

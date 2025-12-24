@@ -12,7 +12,7 @@ import {
   type ObserverReportDto,
   type ObserverReportQuery,
 } from "../services/observerReportService";
-import type { PageResponse } from "../services/voteSubmissionService";
+import type { PageResponse } from "../types/api";
 
 export interface UseObserverReportsParams extends ObserverReportQuery {}
 

@@ -121,6 +121,7 @@ export interface UserDto {
   firstName?: string;
   lastName?: string;
   email?: string;
+  position?: string;
   userName?: string;
   roleName?: string;
   partyId?: UUID | null;
@@ -291,6 +292,19 @@ export interface VoteSubmissionUpdatePayload {
   latitude?: number;
   longitude?: number;
 }
+
+export type VoteSubmissionQuery = {
+  orgId?: string;
+  electionId?: string;
+  centerId?: string;
+  agentId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  page?: number;
+  size?: number;
+};
 
 /* ---------------------------
    File / Tally sheet / Upload

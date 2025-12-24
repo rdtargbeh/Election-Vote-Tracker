@@ -43,11 +43,11 @@ public class StatsCacheEvictService {
             "candidateCenterStatsOfficial",
             "candidateDistrictStatsOfficial",
             "candidateCountyStatsOfficial",
+            "candidateElectionStatsOfficial",
             "candidateCenterStatsParty",
             "candidateDistrictStatsParty",
             "candidateCountyStatsParty",
             "candidateElectionStatsParty",
-            "candidateCenterStatsParty",
             "centerStatsParty",
             "centerStatsOfficial",
             "districtStatsParty",
@@ -55,7 +55,9 @@ public class StatsCacheEvictService {
             "countyStatsParty",
             "countyStatsOfficial",
             "electionStatsParty",
-            "electionStatsOfficial"
+            "electionStatsOfficial",
+            "necResultGeo",
+            "candidateCountyCompare"
     };
 
     /**

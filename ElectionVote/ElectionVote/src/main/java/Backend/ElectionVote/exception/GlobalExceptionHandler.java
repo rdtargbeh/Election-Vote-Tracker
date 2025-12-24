@@ -4,11 +4,13 @@ package Backend.ElectionVote.exception;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -56,5 +58,20 @@ public class GlobalExceptionHandler {
         m.put("error", "internal_server_error");
         m.put("message", "An unexpected error occurred");
         return m;
+    }
+
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", 400);
+        body.put("message", "Validation failed");
+
+        Map<String, String> details = new LinkedHashMap<>();
+        ex.getBindingResult().getFieldErrors()
+                .forEach(err -> details.put(err.getField(), err.getDefaultMessage()));
+
+        body.put("details", details);
+        return ResponseEntity.badRequest().body(body);
     }
 }

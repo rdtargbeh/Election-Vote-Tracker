@@ -1,13 +1,7 @@
 // src/shared/hooks/useVoteSubmissionMutations.ts
-// ------------------------------------------------------
-// Mutation hooks updated to always call multipart createVoteSubmission
-// (the backend expects multipart @RequestPart("payload") for POST).
-// - useCreateVoteSubmission now calls createVoteSubmission regardless of files presence.
-// - The rest of the hooks reuse the service functions from services/voteSubmissionService.
-// ------------------------------------------------------
+// Updated to include the backend atomic upload capability using React Query.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../lib/apiClient";
 import {
   createVoteSubmission,
   updateVoteSubmission,
@@ -27,17 +21,20 @@ export interface VoteSubmissionVerifyRequest {
   comment?: string | null;
 }
 
-/** Create submission (multipart) */
+/** Create submission (supports atomic upload via multipart request) */
 export function useCreateVoteSubmission() {
   const qc = useQueryClient();
+
   return useMutation<
-    VoteSubmissionDto,
-    ApiError,
-    { payload: VoteSubmissionCreatePayload; files?: File[] }
+    VoteSubmissionDto, // The resulting DTO after the submission is created
+    ApiError, // API errors received from the backend
+    { payload: VoteSubmissionCreatePayload; files?: File[] } // Input: Payload and optional files
   >({
     mutationFn: async ({ payload, files }) => {
-      return await createVoteSubmission(payload, files);
+      return createVoteSubmission(payload, files); // Atomic upload handled in the service
     },
+
+    // Upon success: invalidate related queries to refresh UI data
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
       qc.invalidateQueries({
@@ -47,16 +44,20 @@ export function useCreateVoteSubmission() {
   });
 }
 
-/** Update submission */
+/** Update an existing submission (also supports multipart files) */
 export function useUpdateVoteSubmission() {
   const qc = useQueryClient();
+
   return useMutation<
     VoteSubmissionDto,
     ApiError,
-    { id: string; payload: VoteSubmissionUpdatePayload; files?: File[] }
+    { id: string; payload: VoteSubmissionUpdatePayload; files?: File[] } // Input: Submission ID, updated payload, and optional files
   >({
-    mutationFn: async ({ id, payload, files }) =>
-      updateVoteSubmission(id, payload, files),
+    mutationFn: async ({ id, payload, files }) => {
+      return updateVoteSubmission(id, payload, files); // Handles update logic
+    },
+
+    // Refresh updated submission and related info
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
       qc.invalidateQueries({
@@ -69,15 +70,20 @@ export function useUpdateVoteSubmission() {
   });
 }
 
-/** Verify submission */
+/** Verify submission (accept/reject) */
 export function useVerifySubmission() {
   const qc = useQueryClient();
+
   return useMutation<
     VoteSubmissionDto,
     ApiError,
-    { id: string; body: VoteSubmissionVerifyRequest }
+    { id: string; body: VoteSubmissionVerifyRequest } // Input: Submission ID and verification details
   >({
-    mutationFn: async ({ id, body }) => verifyVoteSubmission(id, body),
+    mutationFn: async ({ id, body }) => {
+      return verifyVoteSubmission(id, body); // Calls the verification service
+    },
+
+    // Refresh the verified submission and related info
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
       qc.invalidateQueries({
@@ -93,14 +99,17 @@ export function useVerifySubmission() {
 /** Delete submission */
 export function useDeleteSubmission() {
   const qc = useQueryClient();
+
   return useMutation<
-    void,
+    void, // No return value expected
     ApiError,
-    { id: string; orgId?: string; electionId?: string }
+    { id: string; orgId?: string; electionId?: string } // Input: Submission ID with optional org/election details
   >({
     mutationFn: async ({ id }) => {
-      await deleteVoteSubmission(id);
+      await deleteVoteSubmission(id); // Calls delete service
     },
+
+    // Refresh queries for the affected org/election
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
       if (variables?.orgId && variables?.electionId) {
@@ -111,3 +120,117 @@ export function useDeleteSubmission() {
     },
   });
 }
+
+// // src/shared/hooks/useVoteSubmissionMutations.ts
+// // ------------------------------------------------------
+// // Mutation hooks updated to always call multipart createVoteSubmission
+// // (the backend expects multipart @RequestPart("payload") for POST).
+// // - useCreateVoteSubmission now calls createVoteSubmission regardless of files presence.
+// // - The rest of the hooks reuse the service functions from services/voteSubmissionService.
+// // ------------------------------------------------------
+
+// import { useMutation, useQueryClient } from "@tanstack/react-query";
+// import { apiClient } from "../lib/apiClient";
+// import {
+//   createVoteSubmission,
+//   updateVoteSubmission,
+//   deleteVoteSubmission,
+//   verifyVoteSubmission,
+// } from "../services/voteSubmissionService";
+// import type {
+//   VoteSubmissionCreatePayload,
+//   VoteSubmissionUpdatePayload,
+//   VoteSubmissionDto,
+//   ApiError,
+// } from "../types/api";
+
+// export interface VoteSubmissionVerifyRequest {
+//   verifierUserId: string;
+//   accept: boolean;
+//   comment?: string | null;
+// }
+
+// /** Create submission (multipart) */
+// export function useCreateVoteSubmission() {
+//   const qc = useQueryClient();
+//   return useMutation<
+//     VoteSubmissionDto,
+//     ApiError,
+//     { payload: VoteSubmissionCreatePayload; files?: File[] }
+//   >({
+//     mutationFn: async ({ payload, files }) => {
+//       return await createVoteSubmission(payload, files);
+//     },
+//     onSuccess: (data) => {
+//       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
+//       qc.invalidateQueries({
+//         queryKey: ["election-stats", data.orgId, data.electionId],
+//       });
+//     },
+//   });
+// }
+
+// /** Update submission */
+// export function useUpdateVoteSubmission() {
+//   const qc = useQueryClient();
+//   return useMutation<
+//     VoteSubmissionDto,
+//     ApiError,
+//     { id: string; payload: VoteSubmissionUpdatePayload; files?: File[] }
+//   >({
+//     mutationFn: async ({ id, payload, files }) =>
+//       updateVoteSubmission(id, payload, files),
+//     onSuccess: (data) => {
+//       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
+//       qc.invalidateQueries({
+//         queryKey: ["vote-submission", data.submissionId],
+//       });
+//       qc.invalidateQueries({
+//         queryKey: ["election-stats", data.orgId, data.electionId],
+//       });
+//     },
+//   });
+// }
+
+// /** Verify submission */
+// export function useVerifySubmission() {
+//   const qc = useQueryClient();
+//   return useMutation<
+//     VoteSubmissionDto,
+//     ApiError,
+//     { id: string; body: VoteSubmissionVerifyRequest }
+//   >({
+//     mutationFn: async ({ id, body }) => verifyVoteSubmission(id, body),
+//     onSuccess: (data) => {
+//       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
+//       qc.invalidateQueries({
+//         queryKey: ["vote-submission", data.submissionId],
+//       });
+//       qc.invalidateQueries({
+//         queryKey: ["election-stats", data.orgId, data.electionId],
+//       });
+//     },
+//   });
+// }
+
+// /** Delete submission */
+// export function useDeleteSubmission() {
+//   const qc = useQueryClient();
+//   return useMutation<
+//     void,
+//     ApiError,
+//     { id: string; orgId?: string; electionId?: string }
+//   >({
+//     mutationFn: async ({ id }) => {
+//       await deleteVoteSubmission(id);
+//     },
+//     onSuccess: (_data, variables) => {
+//       qc.invalidateQueries({ queryKey: ["vote-submissions"] });
+//       if (variables?.orgId && variables?.electionId) {
+//         qc.invalidateQueries({
+//           queryKey: ["election-stats", variables.orgId, variables.electionId],
+//         });
+//       }
+//     },
+//   });
+// }

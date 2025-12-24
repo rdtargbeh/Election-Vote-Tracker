@@ -7,7 +7,8 @@
 import React, { useMemo } from "react";
 import { useVoteSubmission } from "../hooks/useVoteSubmission";
 import { useElectionCandidates } from "../hooks/useElectionCandidates";
-import type { VoteSubmissionDto } from "../services/voteSubmissionService";
+import type { VoteSubmissionDto } from "../types/api";
+// import type { VoteSubmissionDto } from "../services/voteSubmissionService";
 
 interface Props {
   submissionId: string | null;

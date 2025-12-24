@@ -62,13 +62,4 @@ public class TenantUserController {
 
 
 
-
-//      a312ed81-f97a-4f8b-bf06-e7f8c67d3020   UP
-//      6c12f086-ae4a-464c-82d0-cb76822bcbaf   CDC
-//      da72da39-ce76-4685-bd20-fb8a4322f7d8   NEC
-//      77728509-44a7-454d-8605-65b041c2e4f4  ANC
-
-    // header
-    // X-Org-Id: 00089918-4d00-42f3-9e40-3319c4cbb93c
-
 }

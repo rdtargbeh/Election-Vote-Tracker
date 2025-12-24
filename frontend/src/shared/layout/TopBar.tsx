@@ -14,6 +14,8 @@ const routeTitleMap: Record<string, string> = {
   "/admin/organizations": "Organizations",
   "/admin/elections": "Elections",
   "/admin/allocations": "Allocations",
+  "/profile": "My Profile", // Added title for User Profile
+  "/users": "User Management", // Added title for User Management
 };
 
 const TopBar: React.FC = () => {

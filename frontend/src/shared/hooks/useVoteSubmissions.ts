@@ -14,12 +14,17 @@
 // ------------------------------------------------------
 
 import { useQuery } from "@tanstack/react-query";
+import { fetchVoteSubmissions } from "../services/voteSubmissionService";
+
 import {
-  fetchVoteSubmissions,
   type VoteSubmissionDto,
   type PageResponse,
   type VoteSubmissionQuery,
-} from "../services/voteSubmissionService";
+} from "../types/api";
+
+// from "../services/voteSubmissionService";
+
+// import type { VoteSubmissionDto } from "../types/api";
 
 export interface UseVoteSubmissionsParams extends VoteSubmissionQuery {}
 

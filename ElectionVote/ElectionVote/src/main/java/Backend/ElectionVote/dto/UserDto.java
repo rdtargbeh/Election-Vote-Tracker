@@ -1,6 +1,7 @@
 package Backend.ElectionVote.dto;
 
 import jakarta.persistence.Column;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -17,6 +18,7 @@ public class UserDto {
     private String firstName;
     private String lastName;
     private String userName;
+    private String position;
     private String email;
     private String phoneNumber;
     private boolean isActive;
@@ -32,5 +34,9 @@ public class UserDto {
     private LocalDateTime lockedUntil;
     private LocalDateTime lastPasswordChange;
     private UUID signingKeyId;         // NEW: optional signing key id associated with user
+
+    // Profile photo data
+    private String profileImageUrl;    // optional external or stored file URL
+    private UUID profileImageUploadId; // optional upload id referencing file_upload.upload_id
 
 }

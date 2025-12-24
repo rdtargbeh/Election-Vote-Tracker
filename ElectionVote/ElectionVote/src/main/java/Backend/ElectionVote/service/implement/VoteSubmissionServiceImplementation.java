@@ -202,6 +202,11 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Duplicate submission (same content).");
         }
 
+        // Ensure new submissions start at version = 1 to satisfy DB constraint
+        if (s.getVersion() == null || s.getVersion() <= 0) {
+            s.setVersion(1);
+        }
+
         VoteSubmission saved = voteSubmissionRepository.save(s);
 
         if (files != null && !files.isEmpty()) {
@@ -251,7 +256,6 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
         return mapper.toDTO(saved);
     }
-
 
 
     // ------------------------------------------------------------------------

@@ -7,13 +7,25 @@
 // Place this file at: src/shared/store/authStore.ts
 // ------------------------------------------------------------------
 
+// src/shared/store/authStore.ts
 import { create } from "zustand";
 
-// Types can be expanded later as we align with backend DTOs.
+export type RoleName =
+  | "SYSTEM_ADMIN"
+  | "NEC_ADMIN"
+  | "ADMIN"
+  | "PARTY_ADMIN"
+  | "AGENT"
+  | "OBSERVER"
+  | "SUPERVISOR"
+  | "COORDINATOR"
+  | "DATA_ENTRY"
+  | "AUDITOR";
+
 export type OrgMembership = {
   orgId: string;
   orgName: string;
-  roleName: string; // ADMIN, PARTY_ADMIN, AGENT, etc.
+  roleName: RoleName; // tenant role
   isEnabled: boolean;
 };
 
@@ -21,17 +33,26 @@ export type AuthUser = {
   userId: string;
   firstName: string;
   lastName: string;
+  position: string;
   email: string;
   userName: string;
+
+  // platform scope
   isSystemAdmin: boolean;
-  globalRoleName: string | null; // from user_role table (optional)
+  globalRoleName: RoleName | null;
+
+  // tenant scope
   orgMemberships: OrgMembership[];
 };
 
 type AuthState = {
   user: AuthUser | null;
   token: string | null;
+
+  // tenant context (may be null for system admin in platform mode)
   currentOrgId: string | null;
+
+  // election context (tenant feature)
   currentElectionId: string | null;
 
   // Actions
@@ -40,33 +61,38 @@ type AuthState = {
   clearAuth: () => void;
   setCurrentOrg: (orgId: string | null) => void;
   setCurrentElection: (electionId: string | null) => void;
+
+  // Helpers
+  isAuthenticated: () => boolean;
+  isSystemAdmin: () => boolean;
+  hasOrgContext: () => boolean;
+  getEnabledOrgs: () => OrgMembership[];
 };
 
 const ELECTION_KEY = "evt.currentElectionId";
 const ORG_KEY = "evt.currentOrgId";
 const TOKEN_KEY = "evt.token";
 
-/**
- * Try to hydrate persisted small state from sessionStorage.
- * We only persist electionId and orgId + token (optional) to survive reloads.
- */
 function loadPersisted(): Partial<AuthState> {
   try {
-    const currentElectionId = sessionStorage.getItem(ELECTION_KEY);
-    const currentOrgId = sessionStorage.getItem(ORG_KEY);
-    const token = sessionStorage.getItem(TOKEN_KEY);
     return {
-      currentElectionId: currentElectionId ? currentElectionId : null,
-      currentOrgId: currentOrgId ? currentOrgId : null,
-      token: token ? token : null,
+      currentElectionId: sessionStorage.getItem(ELECTION_KEY) || null,
+      currentOrgId: sessionStorage.getItem(ORG_KEY) || null,
+      token: sessionStorage.getItem(TOKEN_KEY) || null,
     };
-  } catch (e) {
-    // sessionStorage may be unavailable in some environments; fail silently
+  } catch {
     return {};
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => {
+function persist(key: string, value: string | null) {
+  try {
+    if (value) sessionStorage.setItem(key, value);
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
+
+export const useAuthStore = create<AuthState>((set, get) => {
   const persisted = loadPersisted();
 
   return {
@@ -75,40 +101,44 @@ export const useAuthStore = create<AuthState>((set) => {
     currentOrgId: (persisted.currentOrgId as string) ?? null,
     currentElectionId: (persisted.currentElectionId as string) ?? null,
 
-    // For future flows where backend returns both user + token
     setAuth: ({ user, token }) =>
       set(() => {
-        try {
-          if (token) sessionStorage.setItem(TOKEN_KEY, token);
-        } catch (_) {}
-        return {
-          user,
-          token,
-        };
+        persist(TOKEN_KEY, token);
+
+        // ✅ Real-world behavior:
+        // - If user is NOT system admin, auto-pick a default enabled org if currentOrgId missing.
+        // - If user is system admin, allow staying in platform mode (currentOrgId can remain null).
+        let nextOrgId = get().currentOrgId;
+
+        const enabledOrgs = (user.orgMemberships || []).filter(
+          (m) => m.isEnabled
+        );
+
+        if (!user.isSystemAdmin) {
+          if (!nextOrgId || !enabledOrgs.some((m) => m.orgId === nextOrgId)) {
+            nextOrgId = enabledOrgs[0]?.orgId ?? null;
+            persist(ORG_KEY, nextOrgId);
+          }
+        } else {
+          // SYSTEM_ADMIN: keep org context only if already set; don't force it
+          // but if it's set and not in their memberships, that's still ok (admin can act across tenants)
+          persist(ORG_KEY, nextOrgId);
+        }
+
+        return { user, token, currentOrgId: nextOrgId };
       }),
 
-    // For simple flows where we only have a token (current case)
     setToken: (token) =>
       set(() => {
-        try {
-          if (token) {
-            sessionStorage.setItem(TOKEN_KEY, token);
-          } else {
-            sessionStorage.removeItem(TOKEN_KEY);
-          }
-        } catch (_) {}
-        return {
-          token,
-        };
+        persist(TOKEN_KEY, token);
+        return { token };
       }),
 
     clearAuth: () =>
       set(() => {
-        try {
-          sessionStorage.removeItem(ELECTION_KEY);
-          sessionStorage.removeItem(ORG_KEY);
-          sessionStorage.removeItem(TOKEN_KEY);
-        } catch (_) {}
+        persist(ELECTION_KEY, null);
+        persist(ORG_KEY, null);
+        persist(TOKEN_KEY, null);
         return {
           user: null,
           token: null,
@@ -119,24 +149,23 @@ export const useAuthStore = create<AuthState>((set) => {
 
     setCurrentOrg: (orgId) =>
       set(() => {
-        try {
-          if (orgId) sessionStorage.setItem(ORG_KEY, orgId);
-          else sessionStorage.removeItem(ORG_KEY);
-        } catch (_) {}
-        return {
-          currentOrgId: orgId,
-        };
+        persist(ORG_KEY, orgId);
+        return { currentOrgId: orgId };
       }),
 
     setCurrentElection: (electionId) =>
       set(() => {
-        try {
-          if (electionId) sessionStorage.setItem(ELECTION_KEY, electionId);
-          else sessionStorage.removeItem(ELECTION_KEY);
-        } catch (_) {}
-        return {
-          currentElectionId: electionId,
-        };
+        persist(ELECTION_KEY, electionId);
+        return { currentElectionId: electionId };
       }),
+
+    // Helpers
+    isAuthenticated: () => !!get().token,
+    isSystemAdmin: () =>
+      !!get().user?.isSystemAdmin ||
+      get().user?.globalRoleName === "SYSTEM_ADMIN",
+    hasOrgContext: () => !!get().currentOrgId,
+    getEnabledOrgs: () =>
+      (get().user?.orgMemberships || []).filter((m) => m.isEnabled),
   };
 });

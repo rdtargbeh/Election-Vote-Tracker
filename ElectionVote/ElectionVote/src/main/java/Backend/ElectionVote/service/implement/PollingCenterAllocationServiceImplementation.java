@@ -159,11 +159,11 @@ public class PollingCenterAllocationServiceImplementation implements PollingCent
                     resultRepo.save(r);
 
                     // update geo projection (if present)
-                    geoRepo.findById(r.getResultId()).ifPresent(geo -> {
-                        geo.setTotalRegisteredVoters(a.getRegisteredVoters());
-                        geo.setBallotsIssued(a.getBallotsIssued());
-                        geoRepo.save(geo);
-                    });
+//                    geoRepo.findById(r.getResultId()).ifPresent(geo -> {
+//                        geo.setTotalRegisteredVoters(a.getRegisteredVoters());
+//                        geo.setBallotsIssued(a.getBallotsIssued());
+//                        geoRepo.save(geo);
+//                    });
                 });
     }
 

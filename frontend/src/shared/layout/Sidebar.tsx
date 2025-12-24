@@ -9,6 +9,8 @@ interface NavItem {
 }
 
 const mainItems: NavItem[] = [
+  { label: "My Profile", path: "/profile" },
+  { label: "User Management", path: "/users" },
   { label: "Dashboard", path: "/dashboard" },
   { label: "Geography & Centers", path: "/geography" },
   { label: "Vote Submissions", path: "/vote-submissions" },

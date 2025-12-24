@@ -15,3 +15,4 @@ import org.springframework.stereotype.Repository;
 public interface NecResultGeoRepository extends JpaRepository<NecResultGeo, Long>,
         JpaSpecificationExecutor<NecResultGeo> {
 }
+

@@ -46,10 +46,9 @@ public class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(dto);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<UserDto> get(@PathVariable UUID id) {
-        Optional<UserDto> user = systemUserService.getInTenant(id);
-        return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    @PutMapping("/{userId}")
+    public UserDto update(@PathVariable UUID userId, @Valid @RequestBody UserUpdateRequest req) {
+        return systemUserService.updateInTenant(userId, req);
     }
 
 
@@ -85,17 +84,13 @@ public class UserController {
         return systemUserService.searchInTenant(req, pageable);
     }
 
-    @PutMapping("/{id}")
-    public UserDto update(@PathVariable UUID id, @Valid @RequestBody UserUpdateRequest req) {
-        return systemUserService.updateInTenant(id, req);
-    }
 
     /* ======================= Status Flags ======================= */
 
-    @PatchMapping("/{id}/active")
+    @PatchMapping("/{userId}/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setActive(@PathVariable UUID id, @RequestBody @Valid SetBooleanRequest body) {
-        systemUserService.setActiveInTenant(id, body.value());
+    public void setActive(@PathVariable UUID userId, @RequestBody @Valid SetBooleanRequest body) {
+        systemUserService.setActiveInTenant(userId, body.value());
     }
 
     @PatchMapping("/{id}/verified")
@@ -106,7 +101,7 @@ public class UserController {
 
     /* ======================= Credentials & Security ======================= */
 
-    @PostMapping("/{id}/password")
+    @PostMapping("/{userId}/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void changePassword(@PathVariable UUID id, @Valid @RequestBody ChangePasswordRequest req) {
         systemUserService.changePassword(id, req);
@@ -114,14 +109,14 @@ public class UserController {
 
     @PostMapping("/{id}/password/reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void adminResetPassword(@PathVariable UUID id, @RequestBody @Valid AdminResetPasswordRequest body) {
-        systemUserService.adminResetPasswordInTenant(id, body.newPassword());
+    public void adminResetPassword(@PathVariable UUID userId, @RequestBody @Valid AdminResetPasswordRequest body) {
+        systemUserService.adminResetPasswordInTenant(userId, body.newPassword());
     }
 
-    @PatchMapping("/{id}/lock")
+    @PatchMapping("/{userId}/lock")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setLock(@PathVariable UUID id, @Valid @RequestBody SetLockRequest body) {
-        systemUserService.setLockInTenant(id, body.lock(), body.until());
+    public void setLock(@PathVariable UUID userId, @Valid @RequestBody SetLockRequest body) {
+        systemUserService.setLockInTenant(userId, body.lock(), body.until());
     }
 
     @PostMapping("/{id}/login-failure")
@@ -138,16 +133,15 @@ public class UserController {
 
     /* ======================= Role & Affiliations ======================= */
 
-    @PatchMapping("/{id}/role")
+    @PatchMapping("/{userId}/role")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void assignRole(@PathVariable UUID id, @RequestBody @Valid AssignRoleRequest body) {
-        systemUserService.assignRoleInTenant(id, body.roleName());
+    public void assignRole(@PathVariable UUID userId, @RequestBody @Valid AssignRoleRequest body) {
+        systemUserService.assignRoleInTenant(userId, body.roleName());
     }
 
     @PatchMapping("/{id}/party")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void assignParty(@PathVariable UUID id, @RequestBody AssignIdRequest body) {
-        // pass null to clear
         systemUserService.assignPartyInTenant(id, body == null ? null : body.id());
     }
 
@@ -162,22 +156,6 @@ public class UserController {
     public void setDefaultOrg(@PathVariable UUID id, @RequestBody AssignIdRequest body) {
         systemUserService.setDefaultOrgInTenant(id, body == null ? null : body.id());
     }
-
-    /* ======================= Small request bodies ======================= */
-
-    public record SetBooleanRequest(@NotNull Boolean value) {}
-
-    public record AdminResetPasswordRequest(@NotBlank String newPassword) {}
-
-    public record SetLockRequest(
-            @NotNull Boolean lock,
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime until // optional when lock=false
-    ) {}
-
-    public record AssignRoleRequest(@NotNull RoleName roleName) {}
-
-    /** Pass {"id":"<uuid>"} or {} / null to clear (for party/county/default-org). */
-    public record AssignIdRequest(UUID id) {}
 
 
     // ----------------- Add this method -----------------
@@ -229,4 +207,30 @@ public class UserController {
         // 4) Could not resolve user
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<UserDto> get(@PathVariable UUID id) {
+        Optional<UserDto> user = systemUserService.getInTenant(id);
+        return user.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+
+    /* ======================= Small request bodies ======================= */
+
+    public record SetBooleanRequest(@NotNull Boolean value) {}
+
+    public record AdminResetPasswordRequest(@NotBlank String newPassword) {}
+
+    public record SetLockRequest(
+            @NotNull Boolean lock,
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime until // optional when lock=false
+    ) {}
+
+    public record AssignRoleRequest(@NotNull RoleName roleName) {}
+
+    /** Pass {"id":"<uuid>"} or {} / null to clear (for party/county/default-org). */
+    public record AssignIdRequest(UUID id) {}
+
+
+
 }

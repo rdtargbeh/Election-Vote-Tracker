@@ -70,9 +70,6 @@ public class NECResultServiceImplementation implements NECResultService {
         entity.setTotalRegisteredVoters(allocation.getRegisteredVoters());
         var saved = resultRepo.save(entity);
 
-        // ✅ Upsert geo projection
-        upsertGeo(saved, allocation.getBallotsIssued());
-
         return mapper.toDTO(saved);
     }
 
@@ -109,9 +106,6 @@ public class NECResultServiceImplementation implements NECResultService {
         entity.setTotalRegisteredVoters(allocation.getRegisteredVoters());
 
         var saved = resultRepo.save(entity);
-
-        // ✅ Upsert geo projection
-        upsertGeo(saved, allocation.getBallotsIssued());
 
         return mapper.toDTO(saved);
     }
@@ -340,40 +334,6 @@ public class NECResultServiceImplementation implements NECResultService {
     }
 
 
-    // ------------------------------------
-    private void upsertGeo(NECResult r, Integer ballotsIssued) {
-        var pc = r.getPollingCenter();
-        var d  = pc.getDistrict();
-        var c  = d.getCounty();
-
-        var geo = necResultGeoRepository.findById(r.getResultId()).orElseGet(NecResultGeo::new);
-        geo.setResultId(r.getResultId());
-
-        geo.setElectionId(r.getElection().getElectionId());
-        geo.setCenterId(pc.getCenterId());
-        geo.setCenterCode(pc.getCode());
-        geo.setCenterName(pc.getCenterName());
-        geo.setDistrictId(d.getDistrictId());
-        geo.setDistrictName(d.getDistrictName());
-        geo.setCountyId(c.getCountyId());
-        geo.setCountyName(c.getCountyName());
-
-        geo.setCandidateVotes(r.getCandidateVotes());
-        geo.setBallotsCast(r.getBallotsCast());
-        geo.setInvalidBallots(r.getInvalidBallots());
-        geo.setBlankBallots(r.getBlankBallots());
-        geo.setRejectedBallots(r.getRejectedBallots());
-        geo.setSpoiledBallots(r.getSpoiledBallots());
-        geo.setTotalRegisteredVoters(r.getTotalRegisteredVoters());
-        geo.setBallotsIssued(ballotsIssued);
-        geo.setSource(r.getSource());
-        geo.setUploadTime(r.getUploadTime());
-
-        necResultGeoRepository.save(geo);
-    }
-
-
-    // (Optional) if you use Lombok, add @Slf4j on the class.
 // Otherwise, uncomment the logger below.
 // private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(NECResultServiceImplementation.class);
 

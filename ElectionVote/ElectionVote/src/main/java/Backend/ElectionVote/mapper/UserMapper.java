@@ -17,6 +17,7 @@ public class UserMapper {
         dto.setFirstName(user.getFirstName());
         dto.setLastName(user.getLastName());
         dto.setUserName(user.getUserName());
+        dto.setPosition(user.getPosition());
         dto.setEmail(user.getEmail());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setActive(user.isActive());
@@ -40,6 +41,9 @@ public class UserMapper {
         dto.setLockedUntil(user.getLockedUntil());
         dto.setLastPasswordChange(user.getLastPasswordChange());
 
+        // Profile photo fields
+        dto.setProfileImageUrl(user.getProfileImageUrl());
+        dto.setProfileImageUploadId(user.getProfileImageUpload() != null ? user.getProfileImageUpload().getFileId() : null);
 
 
         return dto;
@@ -57,8 +61,10 @@ public class UserMapper {
         u.setFirstName(req.getFirstName());
         u.setLastName(req.getLastName());
         u.setUserName(req.getUserName());
+        u.setPosition(req.getPosition());
         u.setEmail(req.getEmail());
         u.setPhoneNumber(req.getPhoneNumber());
+        u.setProfileImageUrl(req.getProfileImageUrl());
 
         return u;
     }
@@ -66,13 +72,18 @@ public class UserMapper {
     /**
      * Fully-hydrating toEntity for "create" when the service has already
      * loaded references and encoded the password.
+     *
+     * Overload that accepts an optional resolved FileUpload for profile image.
+     * If profileImageUpload is provided we attach it and, if profileImageUrl is not set,
+     * copy the upload's file URL into the user's profileImageUrl for convenience.
      */
     public SystemUser toEntity(UserCreateRequest req,
                                UserRole role,
                                Party party,
                                County county,
                                Organization defaultOrg,
-                               String encodedPassword) {
+                               String encodedPassword,
+                               FileUpload profileImageUpload) {
         if (req == null) return null;
         SystemUser u = toEntity(req);
         u.setPassword(encodedPassword); // already encoded by service
@@ -80,14 +91,42 @@ public class UserMapper {
         u.setParty(party);
         u.setAssignedCounty(county);
         u.setDefaultOrg(defaultOrg);
+
+        if (profileImageUpload != null) {
+            u.setProfileImageUpload(profileImageUpload);
+            if (u.getProfileImageUrl() == null || u.getProfileImageUrl().isBlank()) {
+                // copy file url to convenience column if not provided explicitly
+                u.setProfileImageUrl(profileImageUpload.getFileUrl());
+            }
+        }
+
         return u;
+    }
+
+
+    /**
+     * Backwards-compatible overload without FileUpload param.
+     */
+    public SystemUser toEntity(UserCreateRequest req,
+                               UserRole role,
+                               Party party,
+                               County county,
+                               Organization defaultOrg,
+                               String encodedPassword) {
+        return toEntity(req, role, party, county, defaultOrg, encodedPassword, null);
     }
 
     /**
      * Apply scalar updates from UpdateUserRequest to an existing entity.
      * Relationships (role/party/county/org) should be set in the service after lookups.
+     *
+     * Use the overload that accepts a resolved FileUpload when the service resolved profileImageUploadId.
      */
     public void applyUpdate(UserUpdateRequest req, SystemUser user) {
+        applyUpdate(req, user, null);
+    }
+
+    public void applyUpdate(UserUpdateRequest req, SystemUser user, FileUpload profileImageUpload) {
         if (req == null || user == null) return;
 
         user.setFirstName(req.getFirstName());
@@ -96,6 +135,20 @@ public class UserMapper {
         user.setEmail(req.getEmail());
         user.setPhoneNumber(req.getPhoneNumber());
 
+        if (req.getPosition() != null) {
+            user.setPosition(req.getPosition());
+        }
+        // Profile image URL update (explicit)
+        if (req.getProfileImageUrl() != null) {
+            user.setProfileImageUrl(req.getProfileImageUrl());
+        }
+        // If a resolved FileUpload is provided, attach it and copy URL if necessary
+        if (profileImageUpload != null) {
+            user.setProfileImageUpload(profileImageUpload);
+            if (user.getProfileImageUrl() == null || user.getProfileImageUrl().isBlank()) {
+                user.setProfileImageUrl(profileImageUpload.getFileUrl());
+            }
+        }
         if (Boolean.TRUE.equals(req.getActive()) || Boolean.FALSE.equals(req.getActive())) {
             user.setActive(req.getActive());
         }
@@ -105,7 +158,7 @@ public class UserMapper {
                 user.setFailedLoginAttempts(0);
             }
         }
-
     }
+
 
 }

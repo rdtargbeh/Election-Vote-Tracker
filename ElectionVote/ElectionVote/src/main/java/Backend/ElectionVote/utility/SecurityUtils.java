@@ -51,4 +51,36 @@ public final class SecurityUtils {
 
         return null;
     }
+
+    public static UUID getUserIdFromContext() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+
+        Object principal = auth.getPrincipal();
+        if (principal == null) return null;
+
+        if (principal instanceof Jwt jwt) {
+            Object claim = jwt.getClaim("user_id");
+            if (claim == null) claim = jwt.getClaim("userId");
+            if (claim == null) claim = jwt.getClaim("sub"); // sometimes UUID stored as subject
+            if (claim instanceof String s) {
+                try { return UUID.fromString(s); } catch (IllegalArgumentException ignored) {}
+            }
+        }
+
+        Method m = ReflectionUtils.findMethod(principal.getClass(), "getUserId");
+        if (m == null) m = ReflectionUtils.findMethod(principal.getClass(), "getId");
+        if (m != null) {
+            try {
+                Object v = ReflectionUtils.invokeMethod(m, principal);
+                if (v instanceof UUID) return (UUID) v;
+                if (v instanceof String s) {
+                    try { return UUID.fromString(s); } catch (IllegalArgumentException ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
+
+        return null;
+    }
+
 }

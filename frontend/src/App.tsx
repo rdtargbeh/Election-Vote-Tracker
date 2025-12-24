@@ -3,6 +3,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import { RequireAuth, RequireOrg } from "./shared/routes/RequireGuards";
+import { RequireSystemAdmin } from "./shared/routes/RequireGuards";
 import AppShell from "./shared/layout/AppShell";
 
 import LoginPage from "./pages/loginPage";
@@ -14,6 +15,9 @@ import VoteSubmissionsPage from "./pages/VoteSubmissionsPage";
 import ObserverReportsPage from "./pages/ObserverReportsPage";
 import ResultsOverviewPage from "./pages/ResultsOverviewPage";
 import CreateSubmissionForm from "./pages/CreateSubmissionForm";
+import UserManagementPage from "./pages/UserManagementPage";
+import UserProfilePage from "./pages/UserProfilePage";
+import OrganizationPage from "./pages/OrganizationPage";
 
 const App: React.FC = () => {
   return (
@@ -88,6 +92,49 @@ const App: React.FC = () => {
                 <ResultsOverviewPage />
               </AppShell>
             </RequireOrg>
+          </RequireAuth>
+        }
+      />
+
+      {/* Route for User Management */}
+      <Route
+        path="/users"
+        element={
+          <RequireAuth>
+            <RequireOrg>
+              <AppShell>
+                <UserManagementPage />
+              </AppShell>
+            </RequireOrg>
+          </RequireAuth>
+        }
+      />
+
+      {/* Route for User Profile */}
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <RequireOrg>
+              <AppShell>
+                <UserProfilePage />
+              </AppShell>
+            </RequireOrg>
+          </RequireAuth>
+        }
+      />
+
+      {/* ✅ Organization is platform/tenant admin-only. Keep it protected + inside shell */}
+      <Route
+        path="/admin/organizations"
+        element={
+          <RequireAuth>
+            <RequireSystemAdmin>
+              <AppShell>
+                {/* ✅ Pass required props to fix TS error */}
+                <OrganizationPage isSystemAdmin={true} userOrgId="" />
+              </AppShell>
+            </RequireSystemAdmin>
           </RequireAuth>
         }
       />

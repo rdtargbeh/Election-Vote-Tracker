@@ -4,6 +4,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 
 const routeTitleMap: Record<string, string> = {
+  "/profile": "My Profile", // Added title for User Profile
+  "/users": "User Management", // Added title for User Management
   "/dashboard": "Dashboard",
   "/geography": "Geography & Centers",
   "/vote-submissions": "Vote Submissions",

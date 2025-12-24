@@ -7,10 +7,8 @@
 // ------------------------------------------------------
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  fetchVoteSubmission,
-  type VoteSubmissionDto,
-} from "../services/voteSubmissionService";
+import { fetchVoteSubmission } from "../services/voteSubmissionService";
+import type { VoteSubmissionDto } from "../types/api";
 
 export function useVoteSubmission(submissionId: string | null | undefined) {
   return useQuery<VoteSubmissionDto>({
@@ -24,24 +22,3 @@ export function useVoteSubmission(submissionId: string | null | undefined) {
     enabled: !!submissionId,
   });
 }
-
-// import { useQuery } from "@tanstack/react-query";
-// import {
-//   fetchVoteSubmission,
-//   type VoteSubmissionDto,
-// } from "../services/voteSubmissionService";
-
-// export function useVoteSubmission(submissionId: string | null) {
-//   return useQuery<VoteSubmissionDto, Error>({
-//     queryKey: ["vote-submission", submissionId],
-//     enabled: !!submissionId,
-//     queryFn: () => {
-//       if (!submissionId) {
-//         // Should not run when disabled, but keeps TS happy
-//         return Promise.reject(new Error("submissionId is required"));
-//       }
-//       return fetchVoteSubmission(submissionId);
-//     },
-//     staleTime: 60_000,
-//   });
-// }

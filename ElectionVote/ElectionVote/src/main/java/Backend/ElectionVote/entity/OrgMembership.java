@@ -4,7 +4,9 @@ import Backend.ElectionVote.security.BaseAuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.UuidGenerator;
+import org.springframework.data.annotation.CreatedDate;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -74,6 +76,9 @@ public class OrgMembership extends BaseAuditedEntity  {
     @Column(name = "is_enabled", nullable = false)
     private  boolean isEnabled = true;
 
+    @CreatedDate
+    @Column(name = "date_created", updatable = false, nullable = false)
+    private LocalDateTime dateCreated;
 
     /* -------------------- non-persistent helpers -------------------- */
 

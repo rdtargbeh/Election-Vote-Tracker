@@ -26,14 +26,22 @@ public class UserCreateRequest {
     @NotBlank @Size(max = 50)   // @Email -  must be a well-formed email address
     private String userName;
 
-    @NotBlank @Size(min = 3, max = 30)
+    @Size(max = 50)
+    private String position;
+
+    @NotBlank @Email  @Size(min = 3, max = 30)
     private String email;
 
     @Size(max = 20)
     private String phoneNumber;
 
+
     @NotBlank @Size(min = 8, max = 200)
     private String password;
+
+    @Size(max = 2048)
+    private String profileImageUrl;
+    private UUID profileImageUploadId;
 
     @NotNull
     private RoleName roleName;

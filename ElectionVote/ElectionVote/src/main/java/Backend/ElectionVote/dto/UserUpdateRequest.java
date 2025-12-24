@@ -23,10 +23,14 @@ public class UserUpdateRequest {
     @NotBlank @Size(max = 30)
     private String lastName;
 
-    @NotBlank @Email  @Size(max = 50)
+    @NotBlank @Size(max = 50)
     private String userName;
 
-    @NotBlank @Size(min = 3, max = 30)
+    @Size(max = 50)
+    private String position;
+
+
+    @NotBlank @Email  @Size(min = 3, max = 30)
     private String email;
 
     @Size(max = 20)
@@ -35,7 +39,11 @@ public class UserUpdateRequest {
     private Boolean active;
     private Boolean verified;
 
-    @NotNull
+    @Size(max = 2048)
+    private String profileImageUrl;
+    private UUID profileImageUploadId;
+
+//    @NotNull
     private RoleName roleName;
     private UUID partyId;                    // optional
     private UUID assignedCountyId;           // optional

@@ -42,5 +42,5 @@ public abstract class AuditBaseEntity {
     // Optional: optimistic locking to protect against concurrent edits
     @jakarta.persistence.Version
     @Column(name = "version", nullable = false)
-    private int version = 0;
+    private Integer  version = 0;
 }
