@@ -1,5 +1,6 @@
 package Backend.ElectionVote.service;
 
+import Backend.ElectionVote.dto.OrganizationBrandingUpdateRequest;
 import Backend.ElectionVote.dto.OrganizationCreateRequest;
 import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
@@ -22,4 +23,6 @@ public interface OrganizationService {
     void setActive(UUID orgId, boolean active);
 
     Optional<OrganizationDto> getBySubdomain(String subdomain);
+
+    OrganizationDto updateBranding(UUID id, OrganizationBrandingUpdateRequest req);
 }

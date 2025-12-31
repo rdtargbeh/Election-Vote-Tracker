@@ -36,7 +36,9 @@ public class TokenService {
     @Value("${app.security.access-token-ttl:3600}")
     private long accessTokenTtlSeconds;
 
-    public long expiresInSeconds() { return accessTokenTtlSeconds; }
+    public long expiresInSeconds() {
+        return accessTokenTtlSeconds;
+    }
 
     public String mintAccessToken(Authentication auth) {
         Instant now = Instant.now();
@@ -73,10 +75,11 @@ public class TokenService {
         return encoder.encode(JwtEncoderParameters.from(claims.build())).getTokenValue();
     }
 
+
     /**
      * Authoritative UUID resolution:
-     *  1) If principal exposes getUserId/getId and it is UUID -> use it
-     *  2) Else use username/email from auth and lookup in DB
+     * 1) If principal exposes getUserId/getId and it is UUID -> use it
+     * 2) Else use username/email from auth and lookup in DB
      */
     private UUID resolveUserUuidOrThrow(Authentication auth) {
         Object principal = auth.getPrincipal();
@@ -116,7 +119,8 @@ public class TokenService {
             Method m = principal.getClass().getMethod("getUserName");
             Object v = m.invoke(principal);
             if (v instanceof String s && !s.isBlank()) return s;
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         return auth.getName(); // fallback
     }
@@ -132,87 +136,19 @@ public class TokenService {
                     UUID parsed = parseUuidOrNull(s);
                     if (parsed != null) return parsed;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return null;
     }
 
     private UUID parseUuidOrNull(String s) {
         if (s == null || s.isBlank()) return null;
-        try { return UUID.fromString(s.trim()); } catch (Exception ignored) { return null; }
+        try {
+            return UUID.fromString(s.trim());
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
-
-
-//
-//    @Autowired
-//    private SystemUserRepository users;
-//    private final JwtEncoder encoder;
-//
-//    @Value("${app.security.issuer:https://vote-tracker.local}")
-//    private String issuer;
-//
-//    @Value("${app.security.access-token-ttl:3600}")
-//    private long accessTokenTtlSeconds;
-//
-//
-//    public long expiresInSeconds() { return accessTokenTtlSeconds; }
-//
-//    public String mintAccessToken(Authentication auth) {
-//        Instant now = Instant.now();
-//        Instant exp = now.plusSeconds(accessTokenTtlSeconds);
-//
-//        Set<String> roles = auth.getAuthorities().stream()
-//                .map(GrantedAuthority::getAuthority)
-//                .collect(Collectors.toUnmodifiableSet());
-//        boolean isSystemAdmin = roles.contains("ROLE_SYSTEM_ADMIN");
-//
-//        String userId = extractUserId(auth); // safe fallback
-//
-//        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
-//                .issuer(issuer)
-//                .issuedAt(now)
-//                .expiresAt(exp)
-//                .subject(userId) // subject can be UUID or username/email
-//                .claim("userId", userId)
-//                .claim("roles", roles)
-//                .claim("isSystemAdmin", isSystemAdmin);
-//
-//        return encoder.encode(JwtEncoderParameters.from(claims.build())).getTokenValue();
-//    }
-//
-//
-//    private String extractUserId(Authentication auth) {
-//        Object principal = auth.getPrincipal();
-//
-//        // Try UserDetails
-//        if (principal instanceof UserDetails ud) {
-//            String name = ud.getUsername();
-//            try {
-//                return UUID.fromString(name).toString(); // if username is UUID
-//            } catch (Exception ignored) {
-//                return name; // fallback to username/email
-//            }
-//        }
-//
-//        // Try reflective getters
-//        try {
-//            Method m = principal.getClass().getMethod("getUserId");
-//            Object v = m.invoke(principal);
-//            if (v instanceof UUID u) return u.toString();
-//            if (v instanceof String s) {
-//                try { return UUID.fromString(s).toString(); } catch (Exception ignored) {
-//                    return s; // fallback to raw string
-//                }
-//            }
-//        } catch (Exception ignored) {}
-//
-//        // Fallback to auth.getName()
-//        String name = auth.getName();
-//        return (name != null && !name.isBlank()) ? name : "unknown";
-//    }
-//
-
-
 }
-

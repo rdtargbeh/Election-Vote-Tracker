@@ -1,5 +1,6 @@
 package Backend.ElectionVote.controller;
 
+import Backend.ElectionVote.dto.OrganizationBrandingUpdateRequest;
 import Backend.ElectionVote.dto.OrganizationCreateRequest;
 import Backend.ElectionVote.dto.OrganizationDto;
 import Backend.ElectionVote.dto.OrganizationUpdateRequest;
@@ -39,7 +40,6 @@ public class OrganizationController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public OrganizationDto create(@RequestBody @Valid OrganizationCreateRequest req) {
-        authz.requirePlatformAdmin(); // Ensure caller is SYSTEM_ADMIN
         return organizationService.create(req); // Delegates creation logic
     }
 
@@ -48,9 +48,19 @@ public class OrganizationController {
      */
     @PutMapping("/{id}")
     public OrganizationDto update(@PathVariable UUID id, @Valid @RequestBody OrganizationUpdateRequest req) {
-        authz.requireNecAdminOrPlatformAdmin(); // Required System Admin or NEC Admin
         return organizationService.update(id, req);
     }
+
+    @PatchMapping("/{id}/branding")
+    public OrganizationDto updateBranding(
+            @PathVariable UUID id,
+            @Valid @RequestBody OrganizationBrandingUpdateRequest req
+    ) {
+        // ✅ org ADMIN/PARTY_ADMIN OR platform admin
+        authz.requireAnyInTenantOrPlatformAdmin("ADMIN", "PARTY_ADMIN");
+        return organizationService.updateBranding(id, req);
+    }
+
 
     /**
      * Get details of an organization by its UUID.
@@ -90,20 +100,9 @@ public class OrganizationController {
     @PatchMapping("/{id}/active")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setActive(@PathVariable UUID id, @RequestBody @Valid SetActiveRequest body) {
-        authz.requirePlatformAdmin();
         organizationService.setActive(id, body.active());
     }
 
-
-    @PatchMapping("/organizations/{orgId}/status")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void setOrganizationActive(
-            @PathVariable UUID orgId,
-            @RequestParam boolean active) {
-
-        authz.requirePlatformAdmin();
-        organizationService.setActive(orgId, active);
-    }
 
 
     public record SetActiveRequest(@NotNull Boolean active) {}

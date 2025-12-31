@@ -1,8 +1,11 @@
 package Backend.ElectionVote.security;
 
 import Backend.ElectionVote.entity.OrgMembership;
+import Backend.ElectionVote.entity.Organization;
 import Backend.ElectionVote.entity.SystemUser;
+import Backend.ElectionVote.enums.OrganizationType;
 import Backend.ElectionVote.repository.OrgMembershipRepository;
+import Backend.ElectionVote.repository.OrganizationRepository;
 import Backend.ElectionVote.repository.SystemUserRepository;
 import Backend.ElectionVote.utility.TenantContext;
 import lombok.RequiredArgsConstructor;
@@ -14,13 +17,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 
 /**
@@ -44,6 +45,8 @@ public class AuthorizationServiceImpl implements AuthorizationService {
     private CurrentUserProvider currentUser;
     @Autowired
     private SystemUserRepository systemUserRepository;
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
 
 
@@ -163,36 +166,6 @@ public class AuthorizationServiceImpl implements AuthorizationService {
         }
     }
 
-    @Override
-    public OrgMembership requireNecAdminOrPlatformAdmin() {
-
-        // 1) Platform-level admin (global override)
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
-            boolean isSystemAdmin = auth.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .anyMatch(a -> a != null && a.toUpperCase().endsWith("SYSTEM_ADMIN"));
-
-            if (isSystemAdmin) {
-                // Return synthetic membership to satisfy callers
-                TenantContext ctx = TenantContext.get();
-                UUID userId = (ctx != null ? ctx.userId().orElse(null) : null);
-                UUID orgId  = (ctx != null ? ctx.orgId().orElse(null) : null);
-                return OrgMembership.systemAdmin(userId, orgId);
-            }
-        }
-
-        // 2) Otherwise, this must be a normal NEC_ADMIN inside NEC tenant
-        OrgMembership m = requireMembership(); // already resolves tenant + user
-
-        if ("NEC_ADMIN".equalsIgnoreCase(m.getRoleName())) {
-            return m;
-        }
-
-        throw new AccessDeniedException("NEC Admin or System Admin required");
-    }
-
-
 
     // 🔹 NEW: platform-level admin guard (no tenant required)
 @Override
@@ -293,6 +266,116 @@ public void requirePlatformAdmin() {
         // Not platform admin — fall back to tenant-scoped check which will validate membership.
         requireAny(roleNames);
     }
+
+
+    @Override
+    public OrgMembership requireNecAdminOrPlatformAdmin() {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        // ✅ 1) SYSTEM_ADMIN (global override) — no tenant required
+        if (auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken)) {
+
+            // A) If authorities are present (some setups)
+            boolean isSystemAdminByAuthorities = auth.getAuthorities() != null
+                    && auth.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .filter(Objects::nonNull)
+                    .map(String::toUpperCase)
+                    .anyMatch(a -> a.endsWith("SYSTEM_ADMIN"));
+
+            // B) If JWT has roles/claims but authorities list is empty (your current logs)
+            boolean isSystemAdminByJwt = false;
+            if (auth.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+                isSystemAdminByJwt = isSystemAdminFromJwt(jwt);
+            }
+
+            // C) If principal is JwtAuthenticationToken (common)
+            if (!isSystemAdminByJwt && auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwtAuth) {
+                isSystemAdminByJwt = isSystemAdminFromJwt(jwtAuth.getToken());
+            }
+
+            if (isSystemAdminByAuthorities || isSystemAdminByJwt) {
+                TenantContext ctx = TenantContext.get();
+                UUID userId = (ctx != null ? ctx.userId().orElse(null) : null);
+                UUID orgId  = (ctx != null ? ctx.orgId().orElse(null) : null);
+                return OrgMembership.systemAdmin(userId, orgId);
+            }
+        }
+
+        // ✅ 2) Otherwise: require NEC_ADMIN membership (tenant-scoped)
+        OrgMembership m = requireMembership(); // must succeed for tenant-scoped
+
+        if ("NEC_ADMIN".equalsIgnoreCase(m.getRoleName())) {
+            return m;
+        }
+
+        throw new AccessDeniedException("NEC Admin or System Admin required");
+    }
+
+    /**
+     * ✅ Robust SYSTEM_ADMIN detection from JWT claims.
+     * Adjust claim keys here to match your token.
+     */
+    private boolean isSystemAdminFromJwt(org.springframework.security.oauth2.jwt.Jwt jwt) {
+        if (jwt == null) return false;
+
+        // Most common claim patterns:
+        // - globalRoleName: "SYSTEM_ADMIN"
+        // - roles: ["SYSTEM_ADMIN", ...]
+        // - authorities: ["ROLE_SYSTEM_ADMIN", ...]
+        // - scope/scp: "SYSTEM_ADMIN ..." or ["SYSTEM_ADMIN", ...]
+
+        String globalRoleName = asString(jwt.getClaim("globalRoleName"));
+        if ("SYSTEM_ADMIN".equalsIgnoreCase(globalRoleName)) return true;
+
+        // sometimes boolean flag
+        Boolean isSystemAdminFlag = jwt.getClaim("isSystemAdmin");
+        if (Boolean.TRUE.equals(isSystemAdminFlag)) return true;
+
+        // arrays: roles / authorities / permissions
+        if (containsRole(jwt.getClaim("roles"), "SYSTEM_ADMIN")) return true;
+        if (containsRole(jwt.getClaim("authorities"), "SYSTEM_ADMIN")) return true;
+        if (containsRole(jwt.getClaim("permissions"), "SYSTEM_ADMIN")) return true;
+
+        // scopes: "scope" or "scp"
+        if (containsRole(jwt.getClaim("scope"), "SYSTEM_ADMIN")) return true;
+        if (containsRole(jwt.getClaim("scp"), "SYSTEM_ADMIN")) return true;
+
+        // fallback: check for something like "ROLE_SYSTEM_ADMIN"
+        if (containsRole(jwt.getClaim("roles"), "ROLE_SYSTEM_ADMIN")) return true;
+        if (containsRole(jwt.getClaim("authorities"), "ROLE_SYSTEM_ADMIN")) return true;
+
+        return false;
+    }
+
+    private String asString(Object v) {
+        return (v == null) ? null : String.valueOf(v);
+    }
+
+    private boolean containsRole(Object claimValue, String expected) {
+        if (claimValue == null || expected == null) return false;
+
+        String exp = expected.toUpperCase();
+
+        // Claim is a String like "SYSTEM_ADMIN NEC_ADMIN"
+        if (claimValue instanceof String s) {
+            String up = s.toUpperCase();
+            return up.contains(exp);
+        }
+
+        // Claim is a List/array
+        if (claimValue instanceof Collection<?> c) {
+            for (Object o : c) {
+                if (o == null) continue;
+                String up = String.valueOf(o).toUpperCase();
+                if (up.equals(exp) || up.endsWith(exp)) return true;
+            }
+        }
+
+        return false;
+    }
+
 
 
     /* ---------------- helpers ---------------- */

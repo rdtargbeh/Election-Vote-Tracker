@@ -1,6 +1,8 @@
 // src/shared/services/userService.ts
 import type { AxiosResponse } from "axios";
 import { apiClient } from "../lib/apiClient";
+// import { http } from "../../api/http";
+
 import type {
   UserCreateRequest,
   UserUpdateRequest,
@@ -8,6 +10,14 @@ import type {
   FetchUsersResponse,
   RoleName,
 } from "../types/userTypes";
+
+/**
+ * /users/me should NOT require org for SYSTEM_ADMIN.
+ * Backend should decide what to return when org is missing.
+ */
+// export async function fetchMe() {
+//   return http.get<any>("/users/me", { orgMode: "auto" });
+// }
 
 /**
  * Multi-tenant header helper:
@@ -58,20 +68,6 @@ async function patchAssignId(
     }
   );
 }
-
-// /**
-//  * For assign endpoints that support clearing:
-//  * - pass {"id":"uuid"} to set
-//  * - pass null to clear (per your controller note)
-//  */
-// async function patchAssignId(
-//   orgId: string | null | undefined,
-//   url: string,
-//   id: string | null
-// ): Promise<void> {
-//   const tenantId = requireOrgId(orgId, "assignment update");
-//   await apiClient.patch(url, id ? { id } : null, tenantHeaders(tenantId));
-// }
 
 /* =========================================================
    USERS - SEARCH / GET / UPDATE
@@ -167,6 +163,21 @@ export async function createTenantMember(
   const tenantId = requireOrgId(orgId, "create tenant user");
   const { data }: AxiosResponse<UserDto> = await apiClient.post(
     "/tenants/users",
+    payload,
+    tenantHeaders(tenantId)
+  );
+  return data;
+}
+
+// ✅ Create user in tenant (SYSTEM/NEC acting inside a selected org)
+// POST /api/users
+export async function createUser(
+  orgId: string,
+  payload: UserCreateRequest
+): Promise<UserDto> {
+  const tenantId = requireOrgId(orgId, "create user");
+  const { data } = await apiClient.post<UserDto>(
+    "/users",
     payload,
     tenantHeaders(tenantId)
   );
@@ -404,4 +415,73 @@ export async function bootstrapFirstSystemAdmin(
     payload
   );
   return data;
+}
+
+// ✅ NEW: platform create (NO X-Org-Id)
+export async function createUserPlatform(
+  req: UserCreateRequest
+): Promise<UserDto> {
+  const { data } = await apiClient.post<UserDto>("platform/system-users", req);
+  return data;
+}
+
+export async function fetchPlatformUsers(params: {
+  page: number;
+  size: number;
+  q?: string;
+  active?: boolean;
+}) {
+  const { data } = await apiClient.get("/users/platform", { params });
+
+  const items = data?.content ?? data?.items ?? [];
+  const totalPages = data?.totalPages ?? 0;
+  const totalElements = data?.totalElements ?? items.length;
+
+  return {
+    users: items,
+    totalPages,
+    totalElements,
+  };
+}
+
+export async function createPlatformUser(payload: UserCreateRequest) {
+  const { data } = await apiClient.post("/platform/system-users", payload);
+
+  return data;
+}
+
+// ✅ PLATFORM update (NO X-Org-Id)
+// PUT /api/platform/system-users/{userId}
+export async function updatePlatformUser(
+  userId: string,
+  payload: UserUpdateRequest
+): Promise<UserDto> {
+  const { data } = await apiClient.put<UserDto>(
+    `/platform/system-users/${userId}`,
+    payload
+  );
+  return data;
+}
+
+// ✅ PLATFORM flags (NO X-Org-Id)
+// Backend should expose these endpoints:
+// PATCH /api/platform/system-users/{id}/active?value=true
+// PATCH /api/platform/system-users/{id}/verified?value=true
+
+export async function setPlatformUserActive(
+  userId: string,
+  value: boolean
+): Promise<void> {
+  await apiClient.patch(`/platform/system-users/${userId}/active`, null, {
+    params: { value },
+  });
+}
+
+export async function setPlatformUserVerified(
+  userId: string,
+  value: boolean
+): Promise<void> {
+  await apiClient.patch(`/platform/system-users/${userId}/verified`, null, {
+    params: { value },
+  });
 }

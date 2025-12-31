@@ -484,36 +484,145 @@ public class FileUploadServiceImplementation implements FileUploadService {
     }
 
     // ---------- helpers ----------
-    private void requireRelatedExistsAndSameOrg(String table, UUID relatedId, UUID orgId) {
-        switch (table) {
-            case "vote_submission" -> {
-                var sub = submissionRepo.findById(relatedId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "vote_submission not found"));
-                if (!sub.getOrganization().getOrgId().equals(orgId))
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related vote_submission belongs to another org");
-            }
-            case "tally_sheet" -> {
-                var ts = tallyRepo.findById(relatedId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "tally_sheet not found"));
-                if (!ts.getOrganization().getOrgId().equals(orgId))
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related tally_sheet belongs to another org");
-            }
-            case "observer_report" -> {
-                var r = observerRepo.findById(relatedId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "observer_report not found"));
-                if (!r.getOrganization().getOrgId().equals(orgId))
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related observer_report belongs to another org");
-            }
-            case "chat_message" -> {
-                var m = chatRepo.findById(relatedId)
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "chat_message not found"));
-                if (!m.getOrganization().getOrgId().equals(orgId))
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related chat_message belongs to another org");
-            }
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported related_table: " + table);
+    private void requireRelatedExistsAndSameOrg(
+            String table,
+            UUID relatedId,
+            UUID orgId
+    ) {
+        // 1️⃣ Normalize
+        if (table == null || table.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "related_table is required");
         }
-        // DB triggers (trg_fu_guard_dispatch) will double-check this too.
+        String t = table.trim().toLowerCase(Locale.ROOT);
+
+        // 2️⃣ Whitelist check
+        if (!ALLOWED_TABLES.contains(t)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unsupported related_table: " + table
+            );
+        }
+
+        // 3️⃣ Entity existence + org consistency (only where it matters)
+        switch (t) {
+
+            case "system_users" -> {
+                SystemUser u = userRepo.findById(relatedId)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(HttpStatus.BAD_REQUEST, "system_user not found"));
+
+                // If SystemUser is org-scoped, enforce org
+                if (u.getDefaultOrg() != null
+                        && u.getDefaultOrg().getOrgId() != null
+                        && !u.getDefaultOrg().getOrgId().equals(orgId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "system_user belongs to another organization"
+                    );
+                }
+            }
+
+            case "vote_submission" -> {
+                VoteSubmission s = submissionRepo.findById(relatedId)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(HttpStatus.BAD_REQUEST, "vote_submission not found"));
+
+                if (!s.getOrganization().getOrgId().equals(orgId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "vote_submission belongs to another organization"
+                    );
+                }
+            }
+
+            case "tally_sheet" -> {
+                TallySheet ts = tallyRepo.findById(relatedId)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(HttpStatus.BAD_REQUEST, "tally_sheet not found"));
+
+                if (!ts.getOrganization().getOrgId().equals(orgId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "tally_sheet belongs to another organization"
+                    );
+                }
+            }
+
+            case "observer_report" -> {
+                ObserverReport r = observerRepo.findById(relatedId)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(HttpStatus.BAD_REQUEST, "observer_report not found"));
+
+                if (!r.getOrganization().getOrgId().equals(orgId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "observer_report belongs to another organization"
+                    );
+                }
+            }
+
+            case "chat_message" -> {
+                ChatMessage m = chatRepo.findById(relatedId)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(HttpStatus.BAD_REQUEST, "chat_message not found"));
+
+                if (!m.getOrganization().getOrgId().equals(orgId)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "chat_message belongs to another organization"
+                    );
+                }
+            }
+
+            // party / candidate / organization may be global or org-scoped
+            case "party", "candidate", "organization" -> {
+                // existence checks optional here
+                // org consistency can be added later if needed
+            }
+        }
     }
+
+    private static final Set<String> ALLOWED_TABLES = Set.of(
+            "system_users",
+            "vote_submission",
+            "tally_sheet",
+            "observer_report",
+            "chat_message",
+            "party",
+            "candidate",
+            "organization"
+    );
+
+//    private void requireRelatedExistsAndSameOrg(String table, UUID relatedId, UUID orgId) {
+//        switch (table) {
+//            case "vote_submission" -> {
+//                var sub = submissionRepo.findById(relatedId)
+//                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "vote_submission not found"));
+//                if (!sub.getOrganization().getOrgId().equals(orgId))
+//                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related vote_submission belongs to another org");
+//            }
+//            case "tally_sheet" -> {
+//                var ts = tallyRepo.findById(relatedId)
+//                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "tally_sheet not found"));
+//                if (!ts.getOrganization().getOrgId().equals(orgId))
+//                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related tally_sheet belongs to another org");
+//            }
+//            case "observer_report" -> {
+//                var r = observerRepo.findById(relatedId)
+//                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "observer_report not found"));
+//                if (!r.getOrganization().getOrgId().equals(orgId))
+//                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related observer_report belongs to another org");
+//            }
+//            case "chat_message" -> {
+//                var m = chatRepo.findById(relatedId)
+//                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "chat_message not found"));
+//                if (!m.getOrganization().getOrgId().equals(orgId))
+//                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Related chat_message belongs to another org");
+//            }
+//            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported related_table: " + table);
+//        }
+//        // DB triggers (trg_fu_guard_dispatch) will double-check this too.
+//    }
 
 
     /**

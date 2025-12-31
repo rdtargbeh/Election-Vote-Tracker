@@ -76,16 +76,37 @@ public class TenantFilter extends OncePerRequestFilter {
     }
 
 
-
     /** Only tenant endpoints should enforce tenant presence. */
     private boolean isTenantScoped(String path) {
         if (path == null) return false;
-        // Add other tenant-only prefixes here as your API grows
-        return path.startsWith("/api/tenants/")
-                || path.startsWith("/api/chat/")     // if your chat APIs are tenant-bound
-                || path.startsWith("/api/votes/")    // example: vote capture is tenant-bound
-                ;
+
+        // ✅ SYSTEM ADMIN GLOBAL ROUTES: no tenant required
+        if (path.startsWith("/api/system/")) return false;
+
+        // ✅ GLOBAL endpoints (no tenant required)
+        if (path.startsWith("/api/elections")) return false;     // elections are global
+        if (path.startsWith("/api/orgs")) return false;          // orgs are platform-managed
+        if (path.startsWith("/api/public/")) return false;
+        if (path.startsWith("/api/auth/")) return false;
+
+        // ✅ PLATFORM USER ROUTES (no tenant required)
+        // IMPORTANT: these must come BEFORE "/api/users/" rule
+        if (path.equals("/api/users/me")) return false;          // system-admin mode supports no org header
+        if (path.startsWith("/api/users/platform")) return false; // list/search platform users
+        if (path.startsWith("/api/users/bootstrap")) return false; // if you have bootstrap endpoints
+        // add more platform-only user endpoints here if needed
+
+        // ✅ Tenant-scoped endpoints (require X-Org-Id or subdomain)
+        return path.startsWith("/api/members")
+                || path.startsWith("/api/chat/")
+                || path.startsWith("/api/votes/")
+                || path.startsWith("/api/org-settings")
+                || path.startsWith("/api/tenants/")
+                || path.startsWith("/api/users/");  // everything else under users is tenant scoped
     }
+
+
+
 
     /** Strict resolution: throw 400 if not resolvable. */
     private UUID resolveTenantStrict(HttpServletRequest req) {
@@ -163,6 +184,8 @@ public class TenantFilter extends OncePerRequestFilter {
         }
         return null;
     }
+
+
 
 
     @Override

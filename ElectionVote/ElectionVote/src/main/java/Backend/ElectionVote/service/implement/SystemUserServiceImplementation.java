@@ -4,9 +4,6 @@ import Backend.ElectionVote.dto.UserCreateRequest;
 import Backend.ElectionVote.dto.UserDto;
 import Backend.ElectionVote.dto.UserUpdateRequest;
 import Backend.ElectionVote.entity.*;
-import Backend.ElectionVote.enums.DeliveryMethod;
-import Backend.ElectionVote.enums.NotificationPriority;
-import Backend.ElectionVote.enums.NotificationType;
 import Backend.ElectionVote.enums.RoleName;
 import Backend.ElectionVote.mapper.UserMapper;
 import Backend.ElectionVote.repository.*;
@@ -333,6 +330,17 @@ public class SystemUserServiceImplementation implements SystemUserService {
                  .map(mapper::toDTO);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserDto> searchPlatform(UserSearchRequest req, Pageable pageable) {
+        Boolean active = (req == null) ? null : req.getActive();
+
+        return systemUserRepository
+                .findPlatformUsersOnly(active, pageable)
+                .map(mapper::toDTO);
+    }
+
+
     /* ======================= FLAGS ======================= */
 
     @Override
@@ -470,6 +478,7 @@ public class SystemUserServiceImplementation implements SystemUserService {
         }
     }
 
+
     /* ======================= HELPERS ======================= */
 
     private UUID requireTenant() {
@@ -558,30 +567,76 @@ public class SystemUserServiceImplementation implements SystemUserService {
                 .ifPresent(m -> m.setRoleName(roleNameText));
     }
 
-    private UserDto toDto(SystemUser user) {
-        UserDto dto = new UserDto();
-        dto.setUserId(user.getUserId());
-        dto.setFirstName(user.getFirstName());
-        dto.setLastName(user.getLastName());
-        dto.setUserName(user.getUserName());
-        dto.setEmail(user.getEmail());
-        dto.setPhoneNumber(user.getPhoneNumber());
-        dto.setActive(user.isActive());
-        dto.setVerified(user.isVerified());
-        dto.setRoleName(user.getRole() != null ? user.getRole().getRoleName().name() : null);
-        dto.setPartyId(user.getParty() != null ? user.getParty().getPartyId() : null);
-        dto.setAssignedCountyId(user.getAssignedCounty() != null ? user.getAssignedCounty().getCountyId() : null);
-        dto.setDefaultOrgId(user.getDefaultOrg() != null ? user.getDefaultOrg().getOrgId() : null);
-        dto.setLastLogin(user.getLastLogin());
-        dto.setDateCreated(user.getDateCreated());
-        return dto;
+
+    @Override
+    @Transactional
+    public void setActivePlatform(UUID userId, boolean active) {
+        authz.requirePlatformAdmin(); // SYSTEM_ADMIN (platform owner) guard
+        SystemUser u = systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        // ✅ optional safety: only platform users (no org membership / no default org)
+        // if you want to restrict:
+        // if (u.getDefaultOrg() != null) throw new IllegalArgumentException("Not a platform user");
+
+        u.setActive(active);
+    }
+
+    @Override
+    @Transactional
+    public void setVerifiedPlatform(UUID userId, boolean verified) {
+        authz.requirePlatformAdmin();
+        SystemUser u = systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        u.setVerified(verified);
+        if (verified) {
+            u.setFailedLoginAttempts(0);
+            u.setLockedUntil(null);
+        }
     }
 
 
+    @Override
+    @Transactional
+    public UserDto updatePlatformUser(UUID userId, UserUpdateRequest req) {
+        authz.requirePlatformAdmin(); // SYSTEM_ADMIN only (platform owner)
+
+        SystemUser u = systemUserRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+
+        // ✅ Uniqueness checks
+        if (req.getEmail() != null && !req.getEmail().equalsIgnoreCase(u.getEmail())) {
+            ensureUniqueEmail(req.getEmail(), u.getUserId());
+        }
+        if (req.getUserName() != null && !req.getUserName().equalsIgnoreCase(u.getUserName())) {
+            ensureUniqueUsername(req.getUserName(), u.getUserId());
+        }
+
+        // Optional profile image upload
+        FileUpload profileImageUpload = null;
+        if (req.getProfileImageUploadId() != null) {
+            profileImageUpload = fileUploadRepository.findById(req.getProfileImageUploadId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile image upload not found"));
+        }
+
+        // ✅ Apply basic update
+        mapper.applyUpdate(req, u, profileImageUpload);
+
+        // ✅ Allow changing platform role (SYSTEM_ADMIN / NEC_ADMIN / ADMIN / PARTY_ADMIN ...)
+        if (req.getRoleName() != null) {
+            UserRole role = loadRole(req.getRoleName());
+            u.setRole(role);
+
+            // only mark as owner if SYSTEM_ADMIN
+            u.setSystemAdmin(role.getRoleName() == RoleName.SYSTEM_ADMIN);
+        }
+
+        return mapper.toDTO(u);
+    }
+
 
     // inside SystemUserServiceImpl (or similar)
-
-
     @Override
     public Optional<UserDto> getInTenant(UUID id, UUID orgId) {
         // ensure check organization/tenant match in repository query
@@ -592,6 +647,42 @@ public class SystemUserServiceImplementation implements SystemUserService {
     public Optional<UserDto> getByUsernameInTenant(String username, UUID orgId) {
         return systemUserRepository.findByUsernameAndOrgId(username, orgId).map(mapper::toDTO);
     }
+
+
+    // -----------------------------
+    // ✅ PLATFORM MODE LOOKUPS
+    // -----------------------------
+
+    @Override
+    public Optional<UserDto> getPlatformUser(UUID userId) {
+        return systemUserRepository.findById(userId)
+                .filter(SystemUser::isActive) // platform-safe: still enforce active user
+                .map(mapper::toDtoPlatform); // or toDto
+    }
+
+    @Override
+    public Optional<UserDto> getPlatformUserByUsername(String usernameOrEmail) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            return Optional.empty();
+        }
+
+        String ident = usernameOrEmail.trim();
+
+        Optional<SystemUser> userOpt = systemUserRepository.findByUserNameIgnoreCase(ident);
+
+        if (userOpt.isEmpty() && ident.contains("@")) {
+            userOpt = systemUserRepository.findByEmailIgnoreCase(ident);
+        }
+
+        return userOpt
+                .filter(SystemUser::isActive)
+                .map(mapper::toDtoPlatform); // or toDto
+    }
+
+
+
+
+
 }
 
 

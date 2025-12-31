@@ -1,3 +1,5 @@
+// src/shared/types/userTypes
+
 export interface UserDto {
   userId: string; // Unique identifier for a user
   firstName: string; // User's first name
@@ -77,6 +79,14 @@ export interface FetchUsersResponse {
   totalPages: number;
   size: number;
   number: number; // current page
+}
+
+export interface OrgMembershipDto {
+  membershipId: string;
+  orgId: string;
+  userId: string;
+  roleName: string; // Role: e.g., ADMIN, PARTY_ADMIN, AGENT
+  enabled: boolean; // Membership status
 }
 
 export type RoleName =

@@ -17,11 +17,5 @@ public class UserSearchRequest {
     private UUID partyId;
     private UUID countyId;
 
-//    public UserSearchRequest(String q, Boolean active, UUID roleId, UUID partyId, UUID countyId) {
-//        this.q = q;
-//        this.active = active;
-//        this.roleId = roleId;
-//        this.partyId = partyId;
-//        this.countyId = countyId;
-//    }
+
 }

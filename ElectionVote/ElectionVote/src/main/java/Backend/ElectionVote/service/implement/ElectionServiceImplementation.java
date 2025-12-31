@@ -10,6 +10,7 @@ import Backend.ElectionVote.repository.ElectionRepository;
 import Backend.ElectionVote.repository.StatsRepository;
 import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.security.CurrentUserProvider;
+import Backend.ElectionVote.service.AuditLogService;
 import Backend.ElectionVote.service.ElectionService;
 import Backend.ElectionVote.service.ElectionStatsProjection;
 import Backend.ElectionVote.utility.ElectionSpecs;
@@ -46,6 +47,7 @@ public class ElectionServiceImplementation implements ElectionService {
     private final ElectionMapper electionMapper;
     private final AuthorizationService authz;
     private final CurrentUserProvider currentUserProvider;
+    private final AuditLogService auditLogService;
     private final JdbcTemplate jdbc;
 
     /**
@@ -56,7 +58,6 @@ public class ElectionServiceImplementation implements ElectionService {
      * <ul>
      *   <li>Each election name and year combination is unique.</li>
      *   <li>Appropriate HTTP status codes are returned when resources are missing or duplicate.</li>
-     *   <li>All entity–DTO transformations are handled through {@link electionMapper}.</li>
      * </ul>
      * </p>
      */
@@ -86,12 +87,6 @@ public class ElectionServiceImplementation implements ElectionService {
                 } catch (Exception ignored) {}
             }
             String desc = "Created election: " + saved.getElectionName();
-            // Insert simple audit_log entry (org_id null for global election)
-            jdbc.update(
-                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) " +
-                            "VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
-                    new Object[]{ null, actor, "ELECTION_CREATE", "election", desc }
-            );
         } catch (Exception ignored) {}
 
 
@@ -99,36 +94,34 @@ public class ElectionServiceImplementation implements ElectionService {
     }
 
 
+    // ElectionServiceImplementation.java (update)
     @Override
     @Transactional
-    public ElectionDto update(UUID id, ElectionUpdateRequest req) {
-        Election entity = electionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
+    public ElectionDto update(UUID electionId, ElectionUpdateRequest req) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Election not found"));
 
-        boolean dup = electionRepository
-                .existsByElectionNameIgnoreCaseAndYear(req.getElectionName(), req.getYear())
-                && !(entity.getElectionName().equalsIgnoreCase(req.getElectionName())
-                && entity.getYear() == req.getYear());
-
-        if (dup) {
-            throw new ResponseStatusException(CONFLICT, "Another election with name '" + req.getElectionName()
-                            + "' and year " + req.getYear() + " exists"
-            );
+        if (req.getElectionName() != null && !req.getElectionName().trim().isEmpty()) {
+            election.setElectionName(req.getElectionName().trim());
         }
 
-        electionMapper.apply(req, entity);
-        Election saved = electionRepository.save(entity);
+        if (req.getYear() != null) {
+            Integer year = req.getYear();
+            if (year < 1900) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Year must be >= 1900");
+            }
+            election.setYear(year); // entity is int; auto-unbox is safe because year != null
+        }
 
-        // Audit log (best-effort)
-        try {
-            UUID actor = null;
-            jdbc.update(
-                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) " +
-                            "VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
-                    new Object[]{ actor, "ELECTION_UPDATE", "election", "Updated election " + saved.getElectionName() }
-            );
-        } catch (Exception ignored) {}
+        if (req.getElectionType() != null) {
+            election.setElectionType(req.getElectionType());
+        }
 
+        if (req.getIsActive() != null) {
+            election.setActive(req.getIsActive());
+        }
+
+        Election saved = electionRepository.save(election);
         return electionMapper.toDTO(saved);
     }
 
@@ -148,8 +141,9 @@ public class ElectionServiceImplementation implements ElectionService {
         }
 
         // Prevent deletion when official NEC results exist for this election
-        Number cnt = (Number) em.createNativeQuery("select count(*) from nec_result where election_id = ?")
-                .setParameter(1, id.toString())
+        Number cnt = (Number) em.createNativeQuery(
+                        "select count(*) from nec_result where election_id = ?"
+                ).setParameter(1, id) // ✅ FIX: bind UUID, not String
                 .getSingleResult();
 
         if (cnt != null && cnt.longValue() > 0) {
@@ -157,18 +151,29 @@ public class ElectionServiceImplementation implements ElectionService {
         }
 
         electionRepository.deleteById(id);
-
-        // Audit log (best-effort)
-        try {
-            UUID actor = null;
-            jdbc.update(
-                    "INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) " +
-                            "VALUES (gen_random_uuid(), NULL, ?, ?, ?, ?)",
-                    new Object[]{ actor, "ELECTION_DELETE", "election", "Deleted election " + id }
-            );
-        } catch (Exception ignored) {}
-
     }
+
+//    @Override
+//    @Transactional
+//    public void delete(UUID id) {
+//
+//        if (!electionRepository.existsById(id)) {
+//            throw new ResponseStatusException(NOT_FOUND, "Election not found");
+//        }
+//
+//        // Prevent deletion when official NEC results exist for this election
+//        Number cnt = (Number) em.createNativeQuery("select count(*) from nec_result where election_id = ?")
+//                .setParameter(1, id.toString())
+//                .getSingleResult();
+//
+//        if (cnt != null && cnt.longValue() > 0) {
+//            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot delete election with official results");
+//        }
+//
+//        electionRepository.deleteById(id);
+//
+//        // Audit log (best-effort)
+//    }
 
 
     /**
@@ -221,6 +226,14 @@ public class ElectionServiceImplementation implements ElectionService {
                 .map(electionMapper::toDTO);
     }
 
+    @Override
+    @Transactional
+    public ElectionDto setActive(UUID id, boolean active) {
+        Election e = electionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Election not found"));
+        e.setActive(active);
+        return electionMapper.toDTO(electionRepository.save(e));
+    }
 
 
     @Override

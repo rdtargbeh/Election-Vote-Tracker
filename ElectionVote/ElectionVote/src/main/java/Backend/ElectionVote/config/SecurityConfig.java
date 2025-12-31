@@ -5,7 +5,7 @@ import Backend.ElectionVote.security.RequestContextMdcFilter;
 import Backend.ElectionVote.security.TenantFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -14,7 +14,6 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -24,7 +23,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -38,18 +36,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    // Constructor-injected collaborators (safe: no PasswordEncoder here)
     private final TenantFilter tenantFilter;
     private final RequestContextMdcFilter requestContextMdcFilter;
+//    private final MembershipAccessFilter membershipAccessFilter;
+
 
     // ---------------------------------------------------------
     //  Password encoder
     // ---------------------------------------------------------
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        // BCrypt with log rounds = 12
-        return new BCryptPasswordEncoder(12);
-    }
+    public PasswordEncoder passwordEncoder() {return new BCryptPasswordEncoder(12);}    // BCrypt with log rounds = 12
 
     // ---------------------------------------------------------
     //  DaoAuthenticationProvider (username/password login)
@@ -112,8 +108,33 @@ public class SecurityConfig {
                                 .preload(true))
                 );
 
+        /**
+         * 1) ✅ TenantFilter:
+         *    - Resolves tenant orgId from X-Org-Id or subdomain
+         *    - Ensures org is ACTIVE
+         *    - Extracts userId + isSystemAdmin from JWT
+         *    - Stores into TenantContext for downstream usage
+         */
         http.addFilterAfter(tenantFilter, BearerTokenAuthenticationFilter.class);
         http.addFilterAfter(requestContextMdcFilter, TenantFilter.class);
+
+        /**
+         * 2) ✅ MembershipAccessFilter (NEW):
+         *    - Runs AFTER TenantFilter (so TenantContext is available)
+         *    - For tenant-scoped endpoints, blocks access if:
+         *        org_membership.is_enabled = false
+         *    - SYSTEM_ADMIN bypasses
+         */
+//        http.addFilterAfter(membershipAccessFilter, TenantFilter.class);
+
+        /**
+         * 3) RequestContextMdcFilter:
+         *    - Writes rid/orgId/userId into MDC for logging/tracing
+         *    - Runs after Tenant + Membership checks
+         */
+//        http.addFilterAfter(requestContextMdcFilter, MembershipAccessFilter.class);
+
+
 
         return http.build();
     }

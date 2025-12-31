@@ -26,4 +26,6 @@ public interface ElectionService {
 
     ElectionStatsDto getOrgElectionStats(UUID orgId, UUID electionId);
 
+    ElectionDto setActive(UUID id, boolean active);
+
 }

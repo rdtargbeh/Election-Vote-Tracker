@@ -69,14 +69,13 @@ export async function fetchOrganizations(
     params: {
       page: params.page,
       size: params.size,
-      search: params.search || undefined,
+      q: params.search || undefined, // ✅ backend expects q
       active: params.active ?? undefined,
-      orgType: params.orgType ?? undefined, // ✅ no "" comparison
-      orgId: params.orgId || undefined,
+      type: params.orgType ?? undefined, // ✅ backend expects type
+      // orgId: params.orgId || undefined,     // only if you actually support this backend-side
     },
   });
 
-  // Support both Spring Page and custom shapes:
   const items = (data?.items ?? data?.content ?? data ?? []) as Organization[];
   const totalElements = (data?.totalElements ?? items.length ?? 0) as number;
 

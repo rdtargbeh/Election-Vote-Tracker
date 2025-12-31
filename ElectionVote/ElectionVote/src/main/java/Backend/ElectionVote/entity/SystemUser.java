@@ -97,7 +97,7 @@ public class SystemUser extends BaseAuditedEntity {
     private boolean isVerified = false;
 
     @Column(name = "is_system_admin", nullable = false)
-    private boolean isSystemAdmin;  // maps to SQL boolean column
+    private boolean isSystemAdmin = false;   // maps to SQL boolean column
 
     /**
      * Audit fields

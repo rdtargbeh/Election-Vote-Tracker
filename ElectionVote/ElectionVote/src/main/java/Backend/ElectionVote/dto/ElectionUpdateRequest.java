@@ -11,7 +11,11 @@ import lombok.Setter;
 public class ElectionUpdateRequest {
     @Size(max = 100)
     private String electionName;
+    @NotNull
+    @Min(1900)
     private Integer year;
+    @NotNull
     private ElectionType electionType;
+    @NotNull
     private Boolean isActive;
 }

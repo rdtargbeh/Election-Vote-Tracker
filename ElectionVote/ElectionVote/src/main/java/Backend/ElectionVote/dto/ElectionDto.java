@@ -1,6 +1,7 @@
 package Backend.ElectionVote.dto;
 
 import Backend.ElectionVote.enums.ElectionType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -20,5 +21,16 @@ public class ElectionDto {
     private boolean isActive;
     private LocalDateTime dateCreated;
     private LocalDateTime dateUpdated;
+
+    @JsonProperty("isActive")
+    public boolean getIsActive() {
+        return isActive;
+    }
+
+    @JsonProperty("isActive")
+    public void setIsActive(boolean isActive) {
+        this.isActive = isActive;
+    }
+
 
 }

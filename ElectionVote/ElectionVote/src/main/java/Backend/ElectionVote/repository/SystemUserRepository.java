@@ -25,7 +25,6 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
 
     boolean existsByUserNameIgnoreCase(String userName);
 
-
     /**
      * Returns a page of users who belong to (are members of) the given organization, with optional filters.
      *
@@ -72,5 +71,26 @@ public interface SystemUserRepository extends JpaRepository<SystemUser, UUID>, J
 
     @Query("select u from SystemUser u where lower(u.userName) = lower(:username) and u.defaultOrg.orgId = :orgId")
     Optional<SystemUser> findByUsernameAndOrgId(@Param("username") String username, @Param("orgId") UUID orgId);
+
+    // ✅ platform filter by active
+    Page<SystemUser> findByIsActive(Boolean isActive, Pageable pageable);
+
+        @Query("""
+        select u
+        from SystemUser u
+        where not exists (
+            select 1
+            from OrgMembership m
+            where m.user = u
+              and m.isEnabled = true
+        )
+        and (:active is null or u.isActive = :active)
+        """)
+        Page<SystemUser> findPlatformUsersOnly(
+                @Param("active") Boolean active,
+                Pageable pageable
+        );
+
+
 
 }

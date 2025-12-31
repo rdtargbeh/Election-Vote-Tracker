@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,8 +40,7 @@ public class ElectionController {
      */
     @PostMapping
     public ElectionDto create(@Valid @RequestBody ElectionCreateRequest req) {
-        authz.requireNecAdminOrPlatformAdmin();  authz.requireNecAdminOrPlatformAdmin();
-//        authz.requirePlatformAdmin();   // <-- protect creation
+        authz.requireNecAdminOrPlatformAdmin();
         return electionService.create(req);
     }
 
@@ -51,7 +51,7 @@ public class ElectionController {
     @PutMapping("/{id}")
     public ElectionDto update(@PathVariable UUID id,
                               @Valid @RequestBody ElectionUpdateRequest req) {
-        authz.requireNecAdminOrPlatformAdmin();   // <-- protect update
+        authz.requireNecAdminOrPlatformAdmin();
         return electionService.update(id, req);
     }
 
@@ -117,6 +117,13 @@ public class ElectionController {
 
         return electionService.search(ElectionSearchRequest.of(q, year, type, active), pageable);
     }
+
+    @PatchMapping("/{id}/active")
+    public ResponseEntity<ElectionDto> setActive(@PathVariable UUID id, @RequestParam("active") boolean active) {
+        authz.requireNecAdminOrPlatformAdmin();
+        return ResponseEntity.ok(electionService.setActive(id, active));
+    }
+
 
 
 }

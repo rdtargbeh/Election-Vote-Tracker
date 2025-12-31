@@ -95,5 +95,17 @@ public interface SystemUserService {
      */
     Optional<UserDto> getInTenant(UUID id, UUID orgId);
 
+    Optional<UserDto> getPlatformUser(UUID userId);
+    Optional<UserDto> getPlatformUserByUsername(String usernameOrEmail);
+
+    Page<UserDto> searchPlatform(UserSearchRequest req, Pageable pageable);
+
+    void setActivePlatform(UUID userId, boolean active);
+    void setVerifiedPlatform(UUID userId, boolean verified);
+
+    // SystemUserService.java
+    UserDto updatePlatformUser(UUID userId, UserUpdateRequest req);
+
+
 
 }

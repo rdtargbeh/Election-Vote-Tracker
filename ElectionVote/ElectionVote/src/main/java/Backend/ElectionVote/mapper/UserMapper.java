@@ -161,4 +161,27 @@ public class UserMapper {
     }
 
 
+    // ✅ platform-safe DTO mapper (no org-scoped fields)
+    public UserDto toDtoPlatform(SystemUser u) {
+        if (u == null) return null;
+
+        UserDto dto = new UserDto();
+        dto.setUserId(u.getUserId());
+        dto.setFirstName(u.getFirstName());
+        dto.setLastName(u.getLastName());
+        dto.setUserName(u.getUserName());
+        dto.setEmail(u.getEmail());
+
+        // ✅ ADD THESE (missing today)
+        dto.setPhoneNumber(u.getPhoneNumber());
+        dto.setPosition(u.getPosition());
+        dto.setRoleName(u.getRole() != null ? u.getRole().getRoleName().name() : null);
+        dto.setActive(u.isActive());
+        dto.setVerified(u.isVerified());
+        dto.setProfileImageUrl(u.getProfileImageUrl());
+        dto.setProfileImageUploadId(u.getProfileImageUpload() != null ? u.getProfileImageUpload().getFileId() : null);
+
+        return dto;
+    }
+
 }

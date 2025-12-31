@@ -36,10 +36,38 @@ public class PlatformAdminController {
     @PostMapping("/system-users")
     @ResponseStatus(HttpStatus.CREATED)
     public UserDto createSystemUser(@RequestBody @Valid UserCreateRequest req) {
-        authz.requireAny("SYSTEM_ADMIN");
+        authz.requirePlatformAdmin();
+//        authz.requireAny("SYSTEM_ADMIN");
         return systemUserService.createPlatformAdmin(req);
     }
 
+    @PutMapping("/system-users/{userId}")
+    public UserDto updatePlatformSystemUser(
+            @PathVariable UUID userId,
+            @RequestBody @Valid UserUpdateRequest req
+    ) {
+        authz.requirePlatformAdmin();
+        return systemUserService.updatePlatformUser(userId, req);
+    }
+
+
+    // ✅ Activate/deactivate platform user
+    @PatchMapping("/system-users/{userId}/active")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setPlatformUserActive(@PathVariable UUID userId,
+                                      @RequestParam boolean value) {
+        authz.requirePlatformAdmin();
+        systemUserService.setActivePlatform(userId, value);
+    }
+
+    // ✅ Verify/unverify platform user
+    @PatchMapping("/system-users/{userId}/verified")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void setPlatformUserVerified(@PathVariable UUID userId,
+                                        @RequestParam boolean value) {
+        authz.requirePlatformAdmin();
+        systemUserService.setVerifiedPlatform(userId, value);
+    }
 
 
     /**

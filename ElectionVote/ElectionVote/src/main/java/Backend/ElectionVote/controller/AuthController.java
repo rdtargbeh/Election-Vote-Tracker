@@ -113,6 +113,14 @@ public class AuthController {
         UUID defaultOrgId = (defaultOrg != null ? defaultOrg.getOrgId() : null);
         String defaultOrgName = (defaultOrg != null ? defaultOrg.getOrgName() : null);
 
+        // ✅ NEW: include org type so frontend can select dashboard mode immediately
+        String defaultOrgType = null;
+        if (defaultOrg != null) {
+            // adjust getter if your Organization uses a different field name
+            Object t = defaultOrg.getOrganizationType();
+            defaultOrgType = (t == null ? null : String.valueOf(t));
+        }
+
         // ✅ 6) Audit successful login
         auditLogService.logLogin(
                 defaultOrgId,
@@ -122,10 +130,16 @@ public class AuthController {
         );
 
         return ResponseEntity.ok(
-                new AuthResponse(jwt, tokenService.expiresInSeconds(), defaultOrgId, defaultOrgName)
+                new AuthResponse(
+                        jwt,
+                        tokenService.expiresInSeconds(),
+                        defaultOrgId,
+                        defaultOrgName,
+                        defaultOrgType,
+                        isSystemAdmin
+                )
         );
     }
-
 
     @Getter
     @AllArgsConstructor
@@ -134,7 +148,13 @@ public class AuthController {
         private long expiresIn;
         private UUID defaultOrgId;
         private String defaultOrgName;
+
+        // ✅ NEW
+        private String defaultOrgType; // "NEC" | "POLITICAL_PARTY" | "MEDIA" | etc.
+        private boolean isSystemAdmin;
     }
+
+
 }
 
 

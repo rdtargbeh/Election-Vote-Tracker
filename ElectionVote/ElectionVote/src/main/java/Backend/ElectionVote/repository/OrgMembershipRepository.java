@@ -22,7 +22,6 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
 
     Optional<OrgMembership> findByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
 
-
     @Query("""
        select m
        from OrgMembership m
@@ -56,11 +55,20 @@ public interface OrgMembershipRepository extends JpaRepository<OrgMembership, UU
     @Query("select count(m) from OrgMembership m where m.organization.orgId = :orgId and upper(m.roleName) = :roleName and m.isEnabled = true")
     long countByOrganization_OrgIdAndRoleNameAndIsEnabledTrue(UUID orgId, String roleName);
 
-    Page<OrgMembership> findByOrganization_OrgId(UUID orgId, Pageable pageable);
 
-    Page<OrgMembership> findByUser_UserId(UUID userId, Pageable pageable);
+    // New ones
 
+    /**
+     * ✅ Returns true if the user has an ENABLED membership in the given org.
+     *
+     * What this does:
+     * - Checks org_membership row exists for (orgId, userId)
+     * - Ensures is_enabled = true
+     *
+     * Why:
+     * - This is the backend enforcement for: "Only enabled members can access tenant content"
+     */
     boolean existsByOrganization_OrgIdAndUser_UserIdAndIsEnabledTrue(UUID orgId, UUID userId);
 
-    void deleteByOrganization_OrgIdAndUser_UserId(UUID orgId, UUID userId);
+
 }

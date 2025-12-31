@@ -86,6 +86,8 @@ public class FileUploadController {
             @RequestParam String relatedTable,
             @RequestParam UUID relatedId,
             @RequestParam UUID uploadedBy,
+            @RequestParam(defaultValue = "PHOTO") FileType fileType,                // ✅ added
+            @RequestParam(defaultValue = "S3") StorageProvider storageProvider,     // ✅ added
             @RequestPart("files") List<MultipartFile> files
     ) {
         Organization org = orgRepo.findById(orgId)
@@ -93,6 +95,20 @@ public class FileUploadController {
         SystemUser user = userRepo.findById(uploadedBy)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
-        return service.saveAllForEntity(org, relatedTable, relatedId, user, files, Map.of());
+        // ✅ Send metadata down (your service already accepts Map.of())
+        return service.saveAllForEntity(
+                org,
+                relatedTable,
+                relatedId,
+                user,
+                files,
+                Map.of(
+                        "fileType", fileType.name(),
+                        "storageProvider", storageProvider.name()
+                )
+        );
     }
+
+
+
 }

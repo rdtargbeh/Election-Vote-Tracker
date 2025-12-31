@@ -36,6 +36,7 @@ public final class TenantContext {
         return (ctx == null) ? null : ctx.orgId;
     }
 
+
     /** Returns current orgId or throws IllegalStateException if missing. */
     public static UUID requireCurrentOrgId() {
         TenantContext ctx = CTX.get();
@@ -52,6 +53,19 @@ public final class TenantContext {
             throw new IllegalStateException("No current userId in TenantContext");
         }
         return ctx.userId;
+    }
+
+
+    /** ✅ Returns current userId or null if not set. */
+    public static UUID getCurrentUserIdOrNull() {
+        TenantContext ctx = CTX.get();
+        return (ctx == null) ? null : ctx.userId;
+    }
+
+    /** ✅ Static system-admin check (safe default=false). */
+    public static boolean isSystemAdminContext() {
+        TenantContext ctx = CTX.get();
+        return ctx != null && ctx.isSystemAdmin;
     }
 
 

@@ -1,5 +1,3 @@
-
-
 // src/main.tsx
 // -----------------------------------------------------------
 // Root entry for the Election Vote Tracker frontend.
@@ -14,27 +12,24 @@
 
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-
-import App from "./App";
+import { router } from "./app/routes";
 import "./index.css";
 
-// Create a single React Query client instance
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {/* Global state for caching backend calls */}
     <QueryClientProvider client={queryClient}>
-      {/* App-level router wrapper */}
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-
-      {/* Only visible during development */}
-      <ReactQueryDevtools initialIsOpen={false} />
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </React.StrictMode>
 );

@@ -24,19 +24,19 @@ public class ElectionCandidateController {
 
     @PostMapping
     public ElectionCandidateDto create(@Valid @RequestBody ElectionCandidateCreateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return electionCandidateService.create(req);
     }
 
     @PutMapping("/{id}")
     public ElectionCandidateDto update(@PathVariable UUID id, @RequestBody ElectionCandidateUpdateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return electionCandidateService.update(id, req);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         electionCandidateService.delete(id);
     }
 
