@@ -1,0 +1,41 @@
+package Backend.ElectionVote.views.entity;
+
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Immutable;
+
+import java.math.BigDecimal;
+
+/**
+ * Read-only JPA mapping of the database view v_election_stats_party.
+ */
+@Entity
+@Table(name = "v_election_stats_party")
+@Immutable
+@Getter
+@NoArgsConstructor
+public class ElectionStatsParty {
+
+    @EmbeddedId
+    private ElectionStatsPartyId id;
+
+    @Column(name = "registered_voters")
+    private Integer registeredVoters;
+
+    @Column(name = "ballots_cast")
+    private Integer ballotsCast;
+
+    @Column(name = "valid_votes")
+    private Integer validVotes;
+
+    @Column(name = "invalid_total")
+    private Integer invalidTotal;
+
+    @Column(name = "turnout_pct", precision = 10, scale = 6)
+    private BigDecimal turnoutPct;
+
+    @Column(name = "invalid_pct", precision = 10, scale = 6)
+    private BigDecimal invalidPct;
+}

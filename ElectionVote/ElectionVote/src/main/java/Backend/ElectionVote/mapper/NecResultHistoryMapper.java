@@ -1,0 +1,34 @@
+package Backend.ElectionVote.mapper;
+
+
+import Backend.ElectionVote.dto.NecResultHistoryDto;
+import Backend.ElectionVote.entity.NecResultHistory;
+import org.springframework.stereotype.Component;
+
+/**
+ * Simple mapper between NecResultHistory entity and NecResultHistoryDto.
+ */
+@Component
+public class NecResultHistoryMapper {
+
+    public NecResultHistoryDto toDto(NecResultHistory h) {
+        if (h == null) return null;
+        NecResultHistoryDto d = new NecResultHistoryDto();
+        d.setHistoryId(h.getHistoryId());
+        d.setResultId(h.getResultId());
+        d.setElectionId(h.getElectionId());
+        d.setCenterId(h.getCenterId());
+        d.setCandidateVotes(h.getCandidateVotes());
+        d.setTotalRegisteredVoters(h.getTotalRegisteredVoters());
+        d.setBallotsCast(h.getBallotsCast());
+        d.setInvalidBallots(h.getInvalidBallots());
+        d.setBlankBallots(h.getBlankBallots());
+        d.setRejectedBallots(h.getRejectedBallots());
+        d.setSpoiledBallots(h.getSpoiledBallots());
+        d.setChangeType(h.getChangeType());
+        d.setChangedBy(h.getChangedBy());
+        d.setChangedAt(h.getChangedAt());
+        d.setNotes(h.getNotes());
+        return d;
+    }
+}

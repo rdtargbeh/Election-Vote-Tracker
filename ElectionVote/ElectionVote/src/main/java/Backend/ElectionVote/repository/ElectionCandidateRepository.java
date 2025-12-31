@@ -1,0 +1,39 @@
+package Backend.ElectionVote.repository;
+
+
+import Backend.ElectionVote.entity.ElectionCandidate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;      // ✅ Spring Data pageable
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface ElectionCandidateRepository extends JpaRepository<ElectionCandidate, UUID> {
+
+    boolean existsByElection_ElectionIdAndCandidate_CandidateId(UUID electionId, UUID candidateId);
+
+    List<ElectionCandidate> findByElection_ElectionId(UUID electionId);
+
+    // Derived query to check uniqueness for election + candidate + center (centerId may be null)
+    boolean existsByElection_ElectionIdAndCandidate_CandidateIdAndPollingCenter_CenterId(
+            UUID electionId,
+            UUID candidateId,
+            UUID centerId
+    );
+
+    // Explicit pageable findAll (optional — JpaRepository already provides this)
+    Page<ElectionCandidate> findAll(Pageable pageable);
+
+    // Variant for the "center is null" (national/district-scoped) case
+    boolean existsByElection_ElectionIdAndCandidate_CandidateIdAndPollingCenterIsNull(
+            UUID electionId,
+            UUID candidateId
+    );
+
+    // Find all for an election ordered by candidate full name (used by service.listByElection)
+    List<ElectionCandidate> findByElection_ElectionIdOrderByCandidate_FullName(UUID electionId);
+}
+
