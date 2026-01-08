@@ -17,6 +17,6 @@ public class UserCreateRoleRequest {
     @NotNull
     private RoleName roleName;
 
-    @Size(max = 150)
+    @Size(max = 250)
     private String description;
 }

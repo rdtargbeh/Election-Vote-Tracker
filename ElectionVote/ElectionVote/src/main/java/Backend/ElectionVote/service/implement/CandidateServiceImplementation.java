@@ -57,6 +57,7 @@ public class CandidateServiceImplementation implements CandidateService {
                         BAD_REQUEST, "Independent candidates cannot belong to a party"
                 );
             }
+
             // Duplicate guard for independents
             if (candidateRepository.existsByFullNameIgnoreCaseAndPartyIsNull(req.getFullName())) {
                 throw new ResponseStatusException(
@@ -218,13 +219,23 @@ public class CandidateServiceImplementation implements CandidateService {
     }
 
     @Override
-    public Page<CandidateDto> search(String q, String position, UUID partyId, Boolean active, Pageable pageable) {
+    public Page<CandidateDto> search(String q,
+                                     String position,
+                                     UUID partyId,
+                                     Boolean active,
+                                     Boolean independent, // ✅ NEW
+                                     Pageable pageable) {
+
         Specification<Candidate> spec = Specification
                 .where(CandidateSpecs.nameContains(q))
                 .and(CandidateSpecs.positionContains(position))
                 .and(CandidateSpecs.partyEquals(partyId))
-                .and(CandidateSpecs.activeEquals(active));
+                .and(CandidateSpecs.activeEquals(active))
+                .and(CandidateSpecs.independentEquals(independent)); // ✅ NEW
+
         return candidateRepository.findAll(spec, pageable).map(mapper::toDTO);
     }
+
+
 
 }

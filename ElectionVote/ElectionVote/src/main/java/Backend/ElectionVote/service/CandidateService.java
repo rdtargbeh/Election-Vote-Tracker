@@ -13,5 +13,13 @@ public interface CandidateService {
     CandidateDto update(UUID id, CandidateUpdateRequest req);
     void delete(UUID id);
     CandidateDto get(UUID id);
-    Page<CandidateDto> search(String q, String position, UUID partyId, Boolean active, Pageable pageable);
+    Page<CandidateDto> search(String q,
+                              String position,
+                              UUID partyId,
+                              Boolean active,
+                              Boolean independent, // ✅ NEW
+                              Pageable pageable);
+
+//    Page<CandidateDto> search(String q, String position, UUID partyId, Boolean active, Pageable pageable);
+
 }

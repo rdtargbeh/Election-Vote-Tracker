@@ -26,6 +26,17 @@ public interface PollingCenterAllocationRepository  extends JpaRepository<Pollin
             PollingCenter pollingCenter
     );
 
+    /**
+     * Readiness Checklist:
+     * Count polling center allocations for an election.
+     * Used by Overview -> "Center allocation"
+     */
+    long countByElection_ElectionId(UUID electionId);
 
+
+
+//    Optional<PollingCenterAllocation> findByElection_ElectionIdAndPollingCenter_PollingCenterId(UUID electionId, UUID centerId);
+
+//    boolean existsByElection_ElectionIdAndPollingCenter_PollingCenterId(UUID electionId, UUID centerId);
 
 }

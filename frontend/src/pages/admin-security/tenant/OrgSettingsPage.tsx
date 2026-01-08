@@ -4,6 +4,8 @@ import { useAuthStore } from "../../../shared/store/authStore";
 
 import {
   fetchOrganizations as fetchOrganizationsPaged,
+  fetchOrganizationById,
+  updateOrganizationBranding, // ✅ ADD THIS EXPORT IN organizationService.ts
   type Organization,
 } from "../../../shared/services/organizationService";
 
@@ -38,14 +40,8 @@ function cleanPatchValue(v: any) {
   return v;
 }
 
-/** Keys */
+/** Keys (org_setting JSON keys) */
 const K = {
-  // branding (tenant settings)
-  LOGO_URL: "logoUrl",
-  PRIMARY_COLOR: "primaryColor",
-  SUBDOMAIN: "subdomain",
-
-  // policy/security (examples from your service)
   RATE_LIMIT_PER_MIN: "rate_limit_per_min",
   SHOW_OFFICIAL: "show_official",
   LOCKOUT_THRESHOLD: "lockout_threshold",
@@ -95,7 +91,19 @@ export default function OrgSettingsPage() {
     }));
   }, [orgsQ.data]);
 
-  /** Load settings */
+  /** ✅ Load Organization (for branding fields stored in organization table) */
+  const orgQ = useQuery({
+    queryKey: ["org", effectiveOrgId || "no-org"],
+    queryFn: async () => {
+      if (!effectiveOrgId) return null;
+      return (await fetchOrganizationById(effectiveOrgId)) as Organization;
+    },
+    enabled: hasOrgContext,
+    staleTime: 10_000,
+    retry: 1,
+  });
+
+  /** Load org_setting JSON settings (policies) */
   const settingsQ = useQuery({
     queryKey: ["org-settings", effectiveOrgId || "no-org"],
     queryFn: () => fetchOrgSettings(effectiveOrgId),
@@ -106,51 +114,66 @@ export default function OrgSettingsPage() {
 
   const dto: OrgSettingDto | undefined = settingsQ.data;
   const settings = dto?.settings ?? {};
+  const org = orgQ.data ?? null;
 
   /** Form state (editable fields) */
   const [form, setForm] = useState({
+    // ✅ Branding comes from Organization table
     logoUrl: "",
     primaryColor: "",
     subdomain: "",
+
+    // ✅ Policies come from org_setting.settings
     rateLimitPerMin: "",
     showOfficial: false,
     lockoutThreshold: "",
     lockoutMinutes: "",
   });
 
-  /** hydrate form from server when it loads/changes */
+  /** hydrate form when org/settings load or org changes */
   React.useEffect(() => {
-    if (!settingsQ.data) return;
+    if (!hasOrgContext) return;
 
-    setForm({
-      logoUrl: safeStr(settings[K.LOGO_URL]),
-      primaryColor: safeStr(settings[K.PRIMARY_COLOR]),
-      subdomain: safeStr(settings[K.SUBDOMAIN]),
+    setForm((p) => ({
+      ...p,
+
+      // Branding from organization
+      logoUrl: safeStr(org?.logoUrl),
+      primaryColor: safeStr(org?.primaryColor),
+      subdomain: safeStr(org?.subdomain),
+
+      // Policies from org_setting dto
       rateLimitPerMin: asInt(settings[K.RATE_LIMIT_PER_MIN]),
       showOfficial: asBool(settings[K.SHOW_OFFICIAL]),
       lockoutThreshold: asInt(settings[K.LOCKOUT_THRESHOLD]),
       lockoutMinutes: asInt(settings[K.LOCKOUT_MINUTES]),
-    });
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsQ.data?.orgId]); // re-hydrate when switching orgs
+  }, [effectiveOrgId, orgQ.dataUpdatedAt, settingsQ.dataUpdatedAt]);
 
   const refreshNow = async () => {
     await qc.invalidateQueries({ queryKey: ["org-settings"] });
-    if (hasOrgContext) await settingsQ.refetch();
+    await qc.invalidateQueries({ queryKey: ["org"] });
+    if (hasOrgContext) {
+      await Promise.all([settingsQ.refetch(), orgQ.refetch()]);
+    }
   };
 
-  /** Save */
+  /** ✅ Save BOTH: branding -> /orgs/{id}/branding, policies -> /org-settings */
   const saveM = useMutation({
     mutationFn: async () => {
       if (!hasOrgContext) throw new Error("Select an organization first.");
 
-      const patch: Record<string, any> = {
-        // branding
-        [K.LOGO_URL]: cleanPatchValue(form.logoUrl),
-        [K.PRIMARY_COLOR]: cleanPatchValue(form.primaryColor),
-        [K.SUBDOMAIN]: cleanPatchValue(form.subdomain),
+      // 1) ✅ Branding payload (organization table)
+      const brandingPayload = {
+        orgId: effectiveOrgId,
+        logoUrl: cleanPatchValue(form.logoUrl),
+        primaryColor: cleanPatchValue(form.primaryColor),
+        subdomain: cleanPatchValue(form.subdomain),
+      };
 
-        // policy/security
+      // 2) ✅ Policy/settings patch (org_setting jsonb)
+      const settingsPatch: Record<string, any> = {
         [K.RATE_LIMIT_PER_MIN]:
           cleanPatchValue(form.rateLimitPerMin) === null
             ? null
@@ -166,14 +189,16 @@ export default function OrgSettingsPage() {
             : Number(form.lockoutMinutes),
       };
 
-      return patchOrgSettings(effectiveOrgId, patch);
+      // run both (sequential to keep debugging easy)
+      await updateOrganizationBranding(brandingPayload);
+      await patchOrgSettings(effectiveOrgId, settingsPatch);
     },
     onSuccess: async () => {
       await refreshNow();
     },
   });
 
-  const canEdit = hasOrgContext; // tenant-scoped page; if org context exists -> editable
+  const canEdit = hasOrgContext;
 
   return (
     <AdminShell
@@ -200,7 +225,9 @@ export default function OrgSettingsPage() {
             <button
               type="button"
               onClick={refreshNow}
-              disabled={!hasOrgContext || settingsQ.isFetching}
+              disabled={
+                !hasOrgContext || settingsQ.isFetching || orgQ.isFetching
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
               title={
                 !hasOrgContext ? "Select an organization first" : "Refresh"
@@ -214,18 +241,18 @@ export default function OrgSettingsPage() {
               type="button"
               onClick={() => {
                 // reset to server values
-                if (!settingsQ.data) return;
+                if (!hasOrgContext) return;
                 setForm({
-                  logoUrl: safeStr(settings[K.LOGO_URL]),
-                  primaryColor: safeStr(settings[K.PRIMARY_COLOR]),
-                  subdomain: safeStr(settings[K.SUBDOMAIN]),
+                  logoUrl: safeStr(org?.logoUrl),
+                  primaryColor: safeStr(org?.primaryColor),
+                  subdomain: safeStr(org?.subdomain),
                   rateLimitPerMin: asInt(settings[K.RATE_LIMIT_PER_MIN]),
                   showOfficial: asBool(settings[K.SHOW_OFFICIAL]),
                   lockoutThreshold: asInt(settings[K.LOCKOUT_THRESHOLD]),
                   lockoutMinutes: asInt(settings[K.LOCKOUT_MINUTES]),
                 });
               }}
-              disabled={!hasOrgContext || settingsQ.isLoading}
+              disabled={!hasOrgContext || settingsQ.isLoading || orgQ.isLoading}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
             >
               <RotateCcw size={16} />
@@ -253,11 +280,9 @@ export default function OrgSettingsPage() {
               </div>
               <select
                 value={selectedOrgId}
-                onChange={(e) => {
-                  setSelectedOrgId(e.target.value);
-                }}
+                onChange={(e) => setSelectedOrgId(e.target.value)}
                 disabled={orgsQ.isLoading || orgsQ.isError}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)]"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary)"
               >
                 <option value="">
                   {orgsQ.isLoading
@@ -286,22 +311,23 @@ export default function OrgSettingsPage() {
               ? "Select an organization to manage its settings."
               : "Missing organization context."}
           </div>
-        ) : settingsQ.isLoading ? (
+        ) : settingsQ.isLoading || orgQ.isLoading ? (
           <div className="text-sm text-slate-600">Loading settings…</div>
-        ) : settingsQ.isError ? (
+        ) : settingsQ.isError || orgQ.isError ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {(settingsQ.error as any)?.message ??
+            {(settingsQ.error as any)?.message ||
+              (orgQ.error as any)?.message ||
               "Failed to load org settings."}
           </div>
         ) : null}
 
         {/* =========================
-            Branding
+            Branding (Organization table)
            ========================= */}
         <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="text-sm font-extrabold text-slate-900">
-              Branding
+              Branding (Organization)
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3">
               <label className="block">
@@ -315,7 +341,7 @@ export default function OrgSettingsPage() {
                   }
                   placeholder="https://..."
                   disabled={!canEdit}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                 />
               </label>
 
@@ -331,7 +357,7 @@ export default function OrgSettingsPage() {
                     }
                     placeholder="#1d4ed8"
                     disabled={!canEdit}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                   />
                   <div className="mt-2 flex items-center gap-2">
                     <div
@@ -354,7 +380,7 @@ export default function OrgSettingsPage() {
                     }
                     placeholder="unity-party"
                     disabled={!canEdit}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                   />
                 </label>
               </div>
@@ -383,11 +409,11 @@ export default function OrgSettingsPage() {
           </section>
 
           {/* =========================
-              Security / Policies
+              Security / Policies (org_setting jsonb)
              ========================= */}
           <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="text-sm font-extrabold text-slate-900">
-              Security & Policy Defaults
+              Security & Policy Defaults (Org Setting)
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-3">
@@ -403,7 +429,7 @@ export default function OrgSettingsPage() {
                   placeholder="e.g., 600"
                   disabled={!canEdit}
                   inputMode="numeric"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                 />
                 <div className="mt-1 text-[11px] text-slate-500">
                   Allowed range enforced by backend (example: 60..10000).
@@ -440,7 +466,7 @@ export default function OrgSettingsPage() {
                     placeholder="e.g., 5"
                     disabled={!canEdit}
                     inputMode="numeric"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                   />
                 </label>
 
@@ -456,7 +482,7 @@ export default function OrgSettingsPage() {
                     placeholder="e.g., 30"
                     disabled={!canEdit}
                     inputMode="numeric"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--org-primary)] disabled:bg-slate-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-(--org-primary) disabled:bg-slate-50"
                   />
                 </label>
               </div>
@@ -479,21 +505,19 @@ export default function OrgSettingsPage() {
         {/* Notes */}
         <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
           <Note
-            title="How this page works"
+            title="Important fix (why branding now works)"
             bullets={[
-              "Calls GET /api/org-settings and PATCH /api/org-settings.",
-              "Always sends X-Org-Id header (tenant-scoped).",
-              "SYSTEM selects an org to manage its settings.",
-              "Empty inputs send null → backend removes the key (clean JSON).",
+              "Branding fields are stored in organization table, not org_setting JSON.",
+              "This page now calls PATCH /api/orgs/{id}/branding for logoUrl, primaryColor, subdomain.",
+              "Policies still use PATCH /api/org-settings (jsonb settings).",
             ]}
           />
           <Note
-            title="Modern enhancements included"
+            title="How this page works"
             bullets={[
-              "Branding editor (logoUrl, primaryColor, subdomain).",
-              "Live color preview + logo preview.",
-              "Reset (restore server values), Refresh, and Save.",
-              "Backend ranges still enforced (rate limits + lockout).",
+              "GET /api/org-settings + GET /api/orgs/{orgId}",
+              "Save runs: PATCH /api/orgs/{orgId}/branding then PATCH /api/org-settings",
+              "Always sends X-Org-Id header on org-settings calls (tenant-scoped).",
             ]}
           />
         </div>

@@ -12,5 +12,5 @@ import java.util.UUID;
 public class VoteTallyUpdateRequest {
     @Min(0) private Integer voteCount;
     private UUID partyId;
-    private UUID candidateId;
+    private UUID electId;
 }

@@ -348,7 +348,7 @@ export default function OrganizationsPage() {
                 ].map((h) => (
                   <th
                     key={h}
-                    className="whitespace-nowrap border-b border-slate-200 px-3 py-2 text-[11px] font-extrabold text-slate-700"
+                    className="whitespace-nowrap border-b border-slate-200 px-2 py-1 text-[11px] font-extrabold text-slate-700 leading-none"
                   >
                     {h}
                   </th>
@@ -359,7 +359,7 @@ export default function OrganizationsPage() {
             <tbody>
               {rows.length === 0 && !orgsQ.isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-sm text-slate-600">
+                  <td colSpan={6} className="px-2 py-4 text-sm text-slate-600">
                     No organizations found.
                   </td>
                 </tr>
@@ -368,28 +368,28 @@ export default function OrganizationsPage() {
                   const active = !!o.active;
                   return (
                     <tr key={o.orgId} className="hover:bg-slate-50">
-                      <td className="border-b border-slate-100 px-3 py-2">
-                        <div className="text-sm font-bold text-slate-900">
+                      <td className="border-b border-slate-100 px-2 py-1 align-middle">
+                        <div className="text-sm font-bold text-slate-900 leading-tight">
                           {safeStr(o.orgName) || "—"}
                         </div>
                       </td>
 
-                      <td className="border-b border-slate-100 px-3 py-2 text-sm text-slate-700">
+                      <td className="border-b border-slate-100 px-2 py-1 text-sm text-slate-700 align-middle leading-none">
                         {orgTypeLabel(o.organizationType)}
                       </td>
 
-                      <td className="border-b border-slate-100 px-3 py-2 text-sm text-slate-700">
+                      <td className="border-b border-slate-100 px-2 py-1 text-sm text-slate-700 align-middle leading-none">
                         {partyLabel(o)}
                       </td>
 
-                      <td className="border-b border-slate-100 px-3 py-2 text-sm text-slate-700">
+                      <td className="border-b border-slate-100 px-2 py-1 text-sm text-slate-700 align-middle leading-none">
                         {safeStr(o.subdomain) || "—"}
                       </td>
 
-                      <td className="border-b border-slate-100 px-3 py-2 text-sm">
+                      <td className="border-b border-slate-100 px-2 py-1 text-sm align-middle">
                         <span
                           className={[
-                            "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-extrabold",
+                            "inline-flex items-center rounded-full px-1.5 py-0 text-[11px] font-extrabold leading-none",
                             active
                               ? "bg-emerald-50 text-emerald-700"
                               : "bg-slate-100 text-slate-700",
@@ -399,11 +399,11 @@ export default function OrganizationsPage() {
                         </span>
                       </td>
 
-                      <td className="border-b border-slate-100 px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="border-b border-slate-100 px-2 py-1 align-middle">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
-                            className="h-9 w-9 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                            className="h-7 w-7 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 inline-flex items-center justify-center"
                             title={
                               canEdit
                                 ? active
@@ -420,15 +420,9 @@ export default function OrganizationsPage() {
                             }
                           >
                             {active ? (
-                              <PowerOff
-                                size={16}
-                                className="mx-auto text-amber-600"
-                              />
+                              <PowerOff size={14} className="text-amber-600" />
                             ) : (
-                              <Power
-                                size={16}
-                                className="mx-auto text-emerald-600"
-                              />
+                              <Power size={14} className="text-emerald-600" />
                             )}
                           </button>
 
@@ -437,10 +431,10 @@ export default function OrganizationsPage() {
                             onClick={() => openEdit(o)}
                             disabled={!canEdit || saveM.isPending}
                             title={canEdit ? "Edit" : "SYSTEM only"}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-semibold leading-none hover:bg-slate-50 disabled:opacity-50"
                           >
-                            <Pencil size={16} />
-                            Edit
+                            <Pencil size={14} />
+                            {/* Edit */}
                           </button>
                         </div>
                       </td>

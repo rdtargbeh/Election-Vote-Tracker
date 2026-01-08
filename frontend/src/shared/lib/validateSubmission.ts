@@ -25,7 +25,7 @@
 import type {
   CandidateVotesMap,
   VoteSubmissionCreatePayload,
-} from "../types/api";
+} from "../../auth/api";
 
 export type ValidationErrors = Partial<Record<string, string>>;
 

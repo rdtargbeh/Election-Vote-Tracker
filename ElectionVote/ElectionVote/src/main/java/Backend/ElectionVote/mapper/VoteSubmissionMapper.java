@@ -14,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.UUID;
 
 
 @Component
@@ -23,10 +22,6 @@ public class VoteSubmissionMapper {
     private static final GeometryFactory GF = new GeometryFactory(new PrecisionModel(), 4326);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // ───────────────────────────────────────────────────────────────
-    //   ENTITY -> DTO
-    //   Adds: structured candidateVotes, validVotes, invalidTotal
-    // ───────────────────────────────────────────────────────────────
     public VoteSubmissionDto toDTO(VoteSubmission s) {
         Organization org = s.getOrganization();
         Election e = s.getElection();
@@ -34,6 +29,7 @@ public class VoteSubmissionMapper {
         PollingCenter c = s.getPollingCenter();
         SystemUser a = s.getAgent();
         SystemUser v = s.getVerifiedBy();
+        Contest contest = s.getContest();
 
         Double lat = null, lon = null;
         if (s.getGpsLocation() != null) {
@@ -44,7 +40,6 @@ public class VoteSubmissionMapper {
         String agentName = a != null ? a.getFirstName() + " " + a.getLastName() : null;
         String verifiedByName = v != null ? v.getFirstName() + " " + v.getLastName() : null;
 
-        // candidateVotes now comes directly from the entity as a Map
         Map<String, Integer> votesMap =
                 s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap();
 
@@ -52,20 +47,15 @@ public class VoteSubmissionMapper {
 
         int invalidTotal =
                 nz(s.getInvalidBallots()) +
-                        nz(s.getBlankBallots()) +
+                        nz(s.getUnmarkedBallots()) +
                         nz(s.getRejectedBallots()) +
                         nz(s.getSpoiledBallots());
 
-        // These are left null; your stats endpoint can compute them
-        Double turnoutPct = null;
-        Double invalidPct = null;
-
-        // Serialize Map -> JSON string for the DTO field
-        String candidateVotesJson = null;
+        String candidateVotesJson;
         try {
             candidateVotesJson = objectMapper.writeValueAsString(votesMap);
         } catch (Exception ex) {
-            candidateVotesJson = "{}"; // safe fallback
+            candidateVotesJson = "{}";
         }
 
         return VoteSubmissionDto.builder()
@@ -77,13 +67,15 @@ public class VoteSubmissionMapper {
                 .electionId(e.getElectionId())
                 .electionName(e.getElectionName())
                 .year(e.getYear())
+                .contestId(s.getContestId())
+                .contestName(contest != null ? contest.getContestName() : null)
+                .contestCategory(contest != null && contest.getCategory() != null ? contest.getCategory().name() : null)
+                .contestScopeType(contest != null && contest.getScopeType() != null ? contest.getScopeType().name() : null)
 
-                // Polling center reference
                 .centerId(c.getCenterId())
                 .centerCode(c.getCode())
                 .centerName(c.getCenterName())
 
-                // Polling place reference
                 .placeId(p.getPlaceId())
                 .placeCode(p.getCode())
                 .placeNumber(p.getPlaceNumber())
@@ -96,19 +88,17 @@ public class VoteSubmissionMapper {
 
                 .validVotes(validVotes)
                 .invalidTotal(invalidTotal)
-                .turnoutPct(turnoutPct)
-                .invalidPct(invalidPct)
 
-                // raw JSON for frontend (if needed)
                 .candidateVotesJson(candidateVotesJson)
-                // structured map for frontend
                 .candidateVotes(votesMap)
 
                 .ballotsCast(s.getBallotsCast())
                 .invalidBallots(s.getInvalidBallots())
-                .blankBallots(s.getBlankBallots())
+                .unmarkedBallots(s.getUnmarkedBallots())
                 .rejectedBallots(s.getRejectedBallots())
                 .spoiledBallots(s.getSpoiledBallots())
+                .unusedBallots(s.getUnusedBallots())
+
                 .status(s.getStatus())
                 .comments(s.getComments())
 
@@ -125,77 +115,60 @@ public class VoteSubmissionMapper {
                 .version(s.getVersion())
                 .idempotencyKey(s.getIdempotencyKey())
 
+                .submissionSignerKeyId(s.getSubmissionSignerKeyId())
+                .submissionSignature(s.getSubmissionSignature())
+                .chainHash(s.getChainHash())
                 .build();
     }
 
-    // ───────────────────────────────────────────────────────────────
-    //   CREATE: DTO -> Entity
-    // ───────────────────────────────────────────────────────────────
     public VoteSubmission toEntity(
             VoteSubmissionCreateRequest req,
-            Organization org, Election e, PollingCenter c, SystemUser agent) {
-
+            Organization org, Election e, PollingCenter c, SystemUser agent
+    ) {
         VoteSubmission s = new VoteSubmission();
 
         s.setOrganization(org);
         s.setElection(e);
         s.setPollingCenter(c);
         s.setAgent(agent);
-
-        // Store Map directly; Hibernate will handle JSONB
+        s.setContestId(req.getContestId());
         s.setCandidateVotes(req.getCandidateVotes());
 
         s.setBallotsCast(nz(req.getBallotsCast()));
         s.setInvalidBallots(nz(req.getInvalidBallots()));
-        s.setBlankBallots(nz(req.getBlankBallots()));
+        s.setUnmarkedBallots(nz(req.getUnmarkedBallots()));
         s.setRejectedBallots(nz(req.getRejectedBallots()));
         s.setSpoiledBallots(nz(req.getSpoiledBallots()));
+        // ✅ NEW
+        s.setUnusedBallots(nz(req.getUnusedBallots()));
+
+        if (req.getUnusedBallots() != null)
+            s.setUnusedBallots(req.getUnusedBallots()); // ✅ add this
 
         s.setStatus(VoteStatus.PENDING);
         s.setComments(req.getComments());
         s.setClientIp(req.getClientIp());
         s.setUserAgent(req.getUserAgent());
 
-        if (req.getLatitude() != null && req.getLongitude() != null) {
-            s.setGpsLocation(point(req.getLongitude(), req.getLatitude()));
-        }
+        s.setIdempotencyKey(req.getIdempotencyKey());
 
         return s;
     }
 
-    // ───────────────────────────────────────────────────────────────
-    //   UPDATE: DTO -> existing Entity
-    // ───────────────────────────────────────────────────────────────
     public void apply(VoteSubmissionUpdateRequest req, VoteSubmission s) {
+        if (req.getCandidateVotes() != null) s.setCandidateVotes(req.getCandidateVotes());
+        if (req.getBallotsCast() != null) s.setBallotsCast(req.getBallotsCast());
+        if (req.getInvalidBallots() != null) s.setInvalidBallots(req.getInvalidBallots());
+        if (req.getUnmarkedBallots() != null) s.setUnmarkedBallots(req.getUnmarkedBallots());
+        if (req.getRejectedBallots() != null) s.setRejectedBallots(req.getRejectedBallots());
+        if (req.getSpoiledBallots() != null) s.setSpoiledBallots(req.getSpoiledBallots());
+        if (req.getUnusedBallots() != null) s.setUnusedBallots(req.getUnusedBallots());
 
-        if (req.getCandidateVotes() != null)
-            s.setCandidateVotes(req.getCandidateVotes());
-
-        if (req.getBallotsCast() != null)
-            s.setBallotsCast(req.getBallotsCast());
-
-        if (req.getInvalidBallots() != null)
-            s.setInvalidBallots(req.getInvalidBallots());
-
-        if (req.getBlankBallots() != null)
-            s.setBlankBallots(req.getBlankBallots());
-
-        if (req.getRejectedBallots() != null)
-            s.setRejectedBallots(req.getRejectedBallots());
-
-        if (req.getSpoiledBallots() != null)
-            s.setSpoiledBallots(req.getSpoiledBallots());
-
-        if (req.getComments() != null)
-            s.setComments(req.getComments());
-
+        if (req.getComments() != null) s.setComments(req.getComments());
         if (req.getLatitude() != null && req.getLongitude() != null)
             s.setGpsLocation(point(req.getLongitude(), req.getLatitude()));
     }
 
-    // ───────────────────────────────────────────────────────────────
-    //   Helpers
-    // ───────────────────────────────────────────────────────────────
     private static Point point(double lon, double lat) {
         Point p = GF.createPoint(new Coordinate(lon, lat));
         p.setSRID(4326);
@@ -205,5 +178,9 @@ public class VoteSubmissionMapper {
     private static int nz(Integer x) {
         return x == null ? 0 : x;
     }
+
+
+
+
 
 }

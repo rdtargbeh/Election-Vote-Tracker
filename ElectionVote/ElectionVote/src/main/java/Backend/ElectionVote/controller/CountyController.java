@@ -2,6 +2,7 @@ package Backend.ElectionVote.controller;
 
 import Backend.ElectionVote.dto.CountyDto;
 import Backend.ElectionVote.dto.CountyRequest;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.CountyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,20 +21,24 @@ public class CountyController {
 
     @Autowired
     private  CountyService service;
+    private final AuthorizationService authz;
 
     @PostMapping
     public ResponseEntity<CountyDto> create(@RequestBody @Valid CountyRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
         return ResponseEntity.ok(service.create(req));
     }
 
     @PutMapping("/{countyId}")
     public ResponseEntity<CountyDto> update(@PathVariable("countyId") UUID countyId,
                                             @RequestBody @Valid CountyRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
         return ResponseEntity.ok(service.update(countyId, req));
     }
 
     @DeleteMapping("/{countyId}")
     public ResponseEntity<Void> delete(@PathVariable("countyId") UUID countyId) {
+        authz.requireNecAdminOrPlatformAdmin();
         service.delete(countyId);
         return ResponseEntity.noContent().build();
     }

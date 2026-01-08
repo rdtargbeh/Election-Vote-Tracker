@@ -42,12 +42,29 @@ public class VoteTallyController {
      *  GET /api/org/{orgId}/elections/{electionId}/vote-tallies?candidateId=...&partyId=...
      */
     @GetMapping
-    public Page<VoteTallyDto> search(@PathVariable("orgId") UUID orgId,
-                                     @PathVariable("electionId") UUID electionId,
-                                     @RequestParam(value = "candidateId", required = false) UUID candidateId,
-                                     @RequestParam(value = "partyId", required = false) UUID partyId,
-                                     @PageableDefault(size = 20) Pageable pageable) {
-        return voteTallyService.search(orgId, electionId, candidateId, partyId, pageable);
+    public Page<VoteTallyDto> search(
+            @PathVariable("orgId") UUID orgId,
+            @PathVariable("electionId") UUID electionId,
+
+            // election-scoped candidate
+            @RequestParam(value = "electId", required = false) UUID electId,
+
+            // election-scoped party
+            @RequestParam(value = "partyId", required = false) UUID partyId,
+
+            // contest filter
+            @RequestParam(value = "contestId", required = false) UUID contestId,
+
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return voteTallyService.search(
+                orgId,
+                electionId,
+                electId,
+                partyId,
+                contestId,
+                pageable
+        );
     }
 
 
@@ -75,22 +92,6 @@ public class VoteTallyController {
     }
 
 
-
-//    @GetMapping
-//    public Page<VoteTallyDto> search(
-//            @RequestParam(required = false) UUID orgId,
-//            @RequestParam(required = false) UUID submissionId,
-//            @RequestParam(required = false) UUID candidateId,
-//            @RequestParam(required = false) UUID partyId,
-//            @PageableDefault(size = 20, sort = "detailId") Pageable pageable) {
-//        return voteTallyService.search(orgId, submissionId, candidateId, partyId, pageable);
-//    }
-//
-//    // Handy utility to rebuild from the JSON on demand (admin/tooling)
-//    @PostMapping("/resync/{submissionId}")
-//    public List<VoteTallyDto> resync(@PathVariable UUID submissionId) {
-//        return voteTallyService.recomputeForElection(submissionId);
-//    }
 
 
 }

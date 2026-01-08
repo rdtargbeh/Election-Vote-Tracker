@@ -21,8 +21,11 @@ public class VoteTallyDto {
     private String partyName;
     private String abbreviation;
 
-    private UUID candidateId;
+    private UUID electId;
     private String fullName;
+
+    private UUID contestId;
+    private String contestName;
 
     private Integer voteCount;
 

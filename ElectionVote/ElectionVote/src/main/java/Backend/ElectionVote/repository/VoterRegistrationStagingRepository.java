@@ -2,6 +2,8 @@ package Backend.ElectionVote.repository;
 
 
 import Backend.ElectionVote.entity.VoterRegistrationStaging;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,4 +15,23 @@ public interface VoterRegistrationStagingRepository extends JpaRepository<VoterR
     List<VoterRegistrationStaging> findByBatchId(UUID batchId);
     List<VoterRegistrationStaging> findByValidatedFalseAndProcessedFalse();
     List<VoterRegistrationStaging> findByProcessedFalseAndValidatedTrue();
+
+    List<VoterRegistrationStaging> findByBatchIdAndValidatedFalse(UUID batchId);
+
+    List<VoterRegistrationStaging> findByBatchIdAndValidatedTrue(UUID batchId);
+
+    List<VoterRegistrationStaging> findByBatchIdAndValidatedTrueAndProcessedFalse(UUID batchId);
+
+    List<VoterRegistrationStaging> findByBatchIdAndProcessedTrue(UUID batchId);
+
+    Page<VoterRegistrationStaging> findByBatchIdAndValidatedTrueAndProcessedFalse(UUID batchId, Pageable pageable);
+
+    // Batch-scoped counts (Overview-style)
+    long countByBatchId(UUID batchId);
+
+    long countByBatchIdAndValidatedFalse(UUID batchId);
+
+    long countByBatchIdAndValidatedTrue(UUID batchId);
+
+    long countByBatchIdAndValidatedTrueAndProcessedFalse(UUID batchId);
 }

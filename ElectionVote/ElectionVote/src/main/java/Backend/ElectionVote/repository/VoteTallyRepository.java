@@ -2,6 +2,7 @@ package Backend.ElectionVote.repository;
 
 import Backend.ElectionVote.entity.VoteTally;
 import com.twilio.base.Page;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -19,6 +20,7 @@ public interface VoteTallyRepository
 
 
     @Modifying
+    @Transactional
     @Query("""
            delete from VoteTally v
            where v.organization.orgId = :orgId
@@ -41,7 +43,6 @@ public interface VoteTallyRepository
             UUID electionId
     );
 
-//
-//    Page<VoteTally> findByOrganizationOrgIdAndElectionElectionId(UUID orgId, UUID electionId, Pageable pageable);
+
 
 }

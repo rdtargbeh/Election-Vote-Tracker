@@ -110,3 +110,17 @@ export async function fetchOrganizationBySubdomain(subdomain: string) {
   const { data } = await apiClient.get(`${BASE_URL}/by-subdomain/${subdomain}`);
   return data;
 }
+
+export async function updateOrganizationBranding(args: {
+  orgId: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  subdomain?: string | null;
+}) {
+  const { data } = await apiClient.patch(`/orgs/${args.orgId}/branding`, {
+    logoUrl: args.logoUrl ?? null,
+    primaryColor: args.primaryColor ?? null,
+    subdomain: args.subdomain ?? null,
+  });
+  return data;
+}

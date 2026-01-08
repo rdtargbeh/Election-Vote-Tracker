@@ -1,3 +1,5 @@
+// src/pages/elections/shared/elections-ui.tsx
+
 /**
  * ELECTIONS UI SHARED COMPONENTS
  * PURPOSE:
@@ -203,49 +205,41 @@ export function PlaceholderNote({
   );
 }
 
+/** ✅ FIX: allow icons/buttons in table cells */
 export function SimpleTable({
   columns,
   rows,
 }: {
   columns: string[];
-  rows: Array<Array<string | number>>;
+  rows: Array<Array<string | number | React.ReactNode>>;
 }) {
   return (
-    <div style={{ width: "100%", overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <div className="w-full overflow-x-auto">
+      <table className="w-full border-collapse">
         <thead>
           <tr>
             {columns.map((c) => (
               <th
                 key={c}
-                style={{
-                  textAlign: "left",
-                  fontSize: 12,
-                  opacity: 0.75,
-                  padding: "10px 8px",
-                  borderBottom: "1px solid #e5e7eb",
-                  whiteSpace: "nowrap",
-                }}
+                className="text-left text-xs font-semibold text-slate-600/80 whitespace-nowrap
+                           px-2 py-2 border-b border-slate-200"
               >
                 {c}
               </th>
             ))}
           </tr>
         </thead>
+
         <tbody>
           {rows.map((r, idx) => (
-            <tr key={idx}>
+            <tr key={idx} className="align-middle">
               {r.map((cell, j) => (
                 <td
                   key={j}
-                  style={{
-                    padding: "10px 8px",
-                    borderBottom: "1px solid #f1f5f9",
-                    fontSize: 13,
-                    whiteSpace: "nowrap",
-                  }}
+                  className="text-[13px] text-slate-900 whitespace-nowrap
+                             px-2 py-1.5 border-b border-slate-100"
                 >
-                  {cell}
+                  {cell as any}
                 </td>
               ))}
             </tr>
@@ -253,5 +247,34 @@ export function SimpleTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+export function ElectionStatusBadge({ active }: { active: boolean }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        fontSize: 12,
+        padding: "2px 8px",
+        borderRadius: 999,
+        border: "1px solid #e5e7eb",
+        background: "#fff",
+        fontWeight: 700,
+      }}
+      title={active ? "Active election" : "Inactive election"}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: active ? "#16a34a" : "#dc2626", // green / red
+        }}
+      />
+      {active ? "ACTIVE" : "INACTIVE"}
+    </span>
   );
 }

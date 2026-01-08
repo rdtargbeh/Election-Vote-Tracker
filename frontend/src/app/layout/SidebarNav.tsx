@@ -51,11 +51,18 @@ export default function SidebarNav() {
     { to: "/dashboard", label: "Dashboard", show: () => true },
     { to: "/elections", label: "Elections", show: () => true },
     { to: "/operations", label: "Operations", show: () => true },
+
     {
       to: "/geography-registry",
       label: "Geography & Registry",
-      show: (m) => m === "NEC" || m === "SYSTEM",
+      show: () => true,
     },
+    // Show Geo only to System Admin & NEC admin
+    // {
+    //   to: "/geography-registry",
+    //   label: "Geography & Registry",
+    //   show: (m) => m === "NEC" || m === "SYSTEM",
+    // },
     { to: "/reports", label: "Reports", show: () => true },
     { to: "/admin-security", label: "Admin & Security", show: () => true },
   ];

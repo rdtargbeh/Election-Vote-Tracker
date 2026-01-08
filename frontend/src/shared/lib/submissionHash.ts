@@ -24,7 +24,7 @@
 import type {
   VoteSubmissionCreatePayload,
   CandidateVotesMap,
-} from "../types/api";
+} from "../../auth/api";
 
 /** Convert ArrayBuffer to lowercase hex string */
 function hexFromBuffer(buf: ArrayBuffer): string {

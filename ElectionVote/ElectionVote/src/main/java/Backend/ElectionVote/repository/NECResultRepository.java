@@ -1,6 +1,7 @@
 package Backend.ElectionVote.repository;
 
 import Backend.ElectionVote.entity.NECResult;
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
@@ -160,5 +161,24 @@ public interface NECResultRepository extends JpaRepository<NECResult, UUID>, Jpa
          WHERE nr.election.electionId = :electionId
         """)
     int publishElectionResults(UUID electionId);
+
+    /**
+     * NEC Workflow: Count published official results for an election.
+     * ✅ Used by Overview -> "Official published"
+     *
+     * Notes:
+     * - Assumes NECResult has boolean field isPublished (or is_published column mapped).
+     *
+     * @param electionId election scope
+     * @return published rows count
+     */
+    @Query("""
+            select count(nr) 
+            from NECResult nr 
+            where nr.election.electionId = :electionId  
+            and nr.isPublished = true 
+            """)
+    long countPublishedByElectionId(@Param("electionId") UUID electionId);
+
 
 }

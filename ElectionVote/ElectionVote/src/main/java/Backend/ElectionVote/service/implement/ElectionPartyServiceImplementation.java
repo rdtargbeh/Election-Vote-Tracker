@@ -122,4 +122,24 @@ public class ElectionPartyServiceImplementation implements ElectionPartyService 
 
         return list.stream().map(mapper::toDto).collect(Collectors.toList());
     }
+
+    @Override
+    @Transactional
+    public ElectionPartyDto setQualificationStatus(
+            UUID electionId,
+            UUID partyId,
+            boolean isQualified) {
+
+        ElectionPartyId id = new ElectionPartyId(electionId, partyId);
+
+        ElectionParty entity = electionPartyRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Election–Party registration not found"));
+
+        entity.setQualified(isQualified);
+
+        return mapper.toDto(electionPartyRepository.save(entity));
+    }
+
 }

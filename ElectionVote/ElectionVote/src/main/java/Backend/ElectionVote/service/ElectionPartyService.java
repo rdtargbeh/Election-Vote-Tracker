@@ -17,5 +17,12 @@ public interface ElectionPartyService {
 
     List<ElectionPartyDto> listPartiesForElection(UUID electionId);
 
-//    ElectionPartyDto addPartyToElection(UUID electionId, ElectionPartyAssignRequest req);
+    ElectionPartyDto setQualificationStatus(
+            UUID electionId,
+            UUID partyId,
+            boolean isQualified
+    );
+
+
+
 }

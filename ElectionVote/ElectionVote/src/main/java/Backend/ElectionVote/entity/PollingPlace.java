@@ -50,7 +50,7 @@ public class PollingPlace {
     private String code;
 
     /** Optional label like "Room 1", "Hall A" */
-    @Column(name = "label", length = 100)
+    @Column(name = "label", length = 100, unique = true)
     private String label;
 
     @Column(name = "is_active", nullable = false)

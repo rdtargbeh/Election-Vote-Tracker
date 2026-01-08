@@ -25,19 +25,19 @@ public class PollingCenterController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PollingCenterDto create(@Valid @RequestBody PollingCenterCreateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return service.create(req);
     }
 
     @PutMapping("/{id}")
     public PollingCenterDto update(@PathVariable UUID id, @RequestBody PollingCenterUpdateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return service.update(id, req);
     }
 
     @DeleteMapping("/{id}")
     public void delete(@PathVariable UUID id) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         service.delete(id);
     }
 

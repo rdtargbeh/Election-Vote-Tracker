@@ -2,8 +2,10 @@ package Backend.ElectionVote.controller;
 
 
 import Backend.ElectionVote.dto.VoteSubmissionRankingDto;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.VoteSubmissionRankingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,45 +21,49 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class VoteSubmissionRankingController {
 
-    private final VoteSubmissionRankingService rankingService;
+
+    private final VoteSubmissionRankingService service;
+    private final AuthorizationService authz;
 
     @PostMapping
-    public ResponseEntity<VoteSubmissionRankingDto> create(@RequestBody VoteSubmissionRankingDto dto) {
-        VoteSubmissionRankingDto created = rankingService.createOrUpdateRanking(dto);
-        return ResponseEntity.ok(created);
+    public ResponseEntity<VoteSubmissionRankingDto> createOrUpdate(@RequestBody VoteSubmissionRankingDto dto) {
+        authz.requireNecAdminOrPlatformAdmin();
+        VoteSubmissionRankingDto saved = service.createOrUpdateRanking(dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @GetMapping("/{svrId}")
     public ResponseEntity<VoteSubmissionRankingDto> get(@PathVariable UUID svrId) {
-        return ResponseEntity.ok(rankingService.getById(svrId));
+        authz.requireNecAdminOrPlatformAdmin();
+        return ResponseEntity.ok(service.getById(svrId));
     }
 
     @GetMapping("/by-submission/{submissionId}")
     public ResponseEntity<List<VoteSubmissionRankingDto>> bySubmission(@PathVariable UUID submissionId) {
-        return ResponseEntity.ok(rankingService.getBySubmission(submissionId));
+        authz.requireNecAdminOrPlatformAdmin();
+        return ResponseEntity.ok(service.getBySubmission(submissionId));
     }
 
     @GetMapping("/by-contest/{contestId}")
     public ResponseEntity<List<VoteSubmissionRankingDto>> byContest(@PathVariable UUID contestId) {
-        return ResponseEntity.ok(rankingService.getByContest(contestId));
-    }
-
-    @PutMapping("/{svrId}")
-    public ResponseEntity<VoteSubmissionRankingDto> update(@PathVariable UUID svrId, @RequestBody VoteSubmissionRankingDto dto) {
-        dto.setSvrId(svrId);
-        VoteSubmissionRankingDto updated = rankingService.createOrUpdateRanking(dto);
-        return ResponseEntity.ok(updated);
+        authz.requireNecAdminOrPlatformAdmin();
+        return ResponseEntity.ok(service.getByContest(contestId));
     }
 
     @DeleteMapping("/{svrId}")
     public ResponseEntity<Void> delete(@PathVariable UUID svrId) {
-        rankingService.deleteById(svrId);
+        authz.requireNecAdminOrPlatformAdmin();
+        service.deleteById(svrId);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/election/{electionId}/backfill")
-    public ResponseEntity<String> backfill(@PathVariable UUID electionId) {
-        int created = rankingService.backfillFromVerifiedSubmissionsForElection(electionId);
-        return ResponseEntity.ok("Backfilled ranking rows: " + created);
+    @PostMapping("/backfill/election/{electionId}")
+    public ResponseEntity<?> backfill(@PathVariable UUID electionId) {
+        authz.requireNecAdminOrPlatformAdmin();
+        int processed = service.backfillFromVerifiedSubmissionsForElection(electionId);
+        return ResponseEntity.ok(java.util.Map.of("electionId", electionId, "processed", processed));
     }
+
+
+
 }

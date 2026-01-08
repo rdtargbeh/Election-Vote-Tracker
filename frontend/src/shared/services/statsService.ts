@@ -1,7 +1,7 @@
 // src/shared/services/statsService
 
 import { apiClient } from "../lib/apiClient";
-import type { PageResponse } from "../types/api";
+import type { PageResponse } from "../../auth/api";
 
 type PageParams = {
   page?: number;

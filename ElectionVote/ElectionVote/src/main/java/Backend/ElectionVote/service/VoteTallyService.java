@@ -25,11 +25,12 @@ public interface VoteTallyService {
      * Read-only search for diagnostics / admin / reporting.
      * Does NOT change data.
      */
-    Page<VoteTallyDto> search(UUID orgId,
-                              UUID submissionId,
-                              UUID candidateId,
-                              UUID partyId,
-                              Pageable pageable);
+    public Page<VoteTallyDto> search(UUID orgId,
+                                     UUID electionId,
+                                     UUID electId,
+                                     UUID partyId,
+                                     UUID contestId,
+                                     Pageable pageable);
 
     List<VoteTallyDto> recomputeForElection(UUID orgId,
                                             UUID electionId,

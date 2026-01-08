@@ -21,4 +21,11 @@ public interface VoterRegistrationRepository extends JpaRepository<VoterRegistra
     List<VoterRegistration> findByCountyId(UUID countyId);
 
     List<VoterRegistration> findByElectionId(UUID electionId);
+
+    /**
+     * Optional readiness: Count final voter registrations for an election.
+     */
+    long countByElectionId(UUID electionId);
+
+
 }

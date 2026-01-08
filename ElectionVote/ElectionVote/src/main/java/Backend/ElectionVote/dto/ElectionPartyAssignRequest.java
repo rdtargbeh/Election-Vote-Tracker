@@ -10,7 +10,7 @@ import java.util.UUID;
 public class ElectionPartyAssignRequest {
 
     @NotNull
-//    @JsonIgnore
+    @JsonIgnore
     private UUID electionId;
 
     @NotNull

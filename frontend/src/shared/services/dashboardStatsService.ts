@@ -1,6 +1,6 @@
 // src/shared/services/dashboardStatsService.ts
 import { apiClient } from "../lib/apiClient";
-import type { PageResponse, UUID } from "../types/api";
+import type { PageResponse, UUID } from "../../auth/api";
 
 export type DashboardMode = "SYSTEM" | "NEC" | "TENANT";
 

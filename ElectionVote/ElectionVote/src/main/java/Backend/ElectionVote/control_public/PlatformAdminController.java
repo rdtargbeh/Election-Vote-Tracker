@@ -71,51 +71,6 @@ public class PlatformAdminController {
 
 
     /**
-     * Create a new political party (global scope).
-     *
-     * <p>This endpoint is platform-wide and is NOT tenant-scoped.
-     * Only a SYSTEM_ADMIN can create parties, because parties are
-     * global metadata used by all organizations and elections.
-     *
-     * <p>Authorization Rules:
-     * <ul>
-     *   <li>Caller must be authenticated.</li>
-     *   <li>Caller must be a SYSTEM_ADMIN (platform admin).</li>
-     *   <li>Tenant context (X-Org-Id) is NOT required or used.</li>
-     * </ul>
-     *
-     * <p>Common Use Cases:
-     * <ul>
-     *   <li>Populate global party list (UP, CDC, ANC, LP, etc.)</li>
-     *   <li>Maintain official NEC party registry</li>
-     *   <li>Prepare global party catalog for elections</li>
-     * </ul>
-     *
-     * <p>Response:
-     * Returns the created {@link PartyDto} with its assigned UUID.
-     *
-     * @param req Party creation request payload
-     * @return Created Party DTO with HTTP 201 (Created)
-     * @throws IllegalArgumentException if party name or abbreviation already exists
-     */
-    @PostMapping("/party")
-    public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
-
-        // --- Authorization ---
-        // Only platform SYSTEM_ADMIN can create global parties.
-        authz.requirePlatformAdmin();
-
-        // --- Handle creation ---
-        PartyDto created = partyService.create(req);
-
-        // Return result with HTTP 201
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(created);
-    }
-
-
-    /**
      * Activate or deactivate an organization (tenant).
      *
      * <p>This endpoint allows a platform-level SYSTEM_ADMIN to enable or disable

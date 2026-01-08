@@ -4,5 +4,6 @@ public enum VoteStatus {
     PENDING,
     VERIFIED,
     FLAGGED,
-    REJECTED
+    REJECTED,
+    DRAFT,
 }

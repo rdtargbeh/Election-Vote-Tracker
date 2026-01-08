@@ -32,7 +32,7 @@ public class UserRole {
     @Column(name = "role_name", nullable = false, length = 30)
     private RoleName roleName;
 
-    @Column(name = "description", length = 150)
+    @Column(name = "description", length = 250)
     private String description;
 
     @CreationTimestamp

@@ -8,7 +8,7 @@ import type {
   UserDto,
   UserUpdateRequest,
   RoleName,
-} from "../../../shared/types/userTypes";
+} from "../../../auth/userTypes";
 
 import {
   fetchUsers, // tenant scoped (requires X-Org-Id header)

@@ -2,6 +2,7 @@ package Backend.ElectionVote.service.implement;
 
 import Backend.ElectionVote.dto.PollingPlaceCreateRequest;
 import Backend.ElectionVote.dto.PollingPlaceDto;
+import Backend.ElectionVote.dto.PollingPlaceUpdateRequest;
 import Backend.ElectionVote.entity.District;
 import Backend.ElectionVote.entity.PollingCenter;
 import Backend.ElectionVote.entity.PollingPlace;
@@ -10,11 +11,19 @@ import Backend.ElectionVote.repository.PollingCenterRepository;
 import Backend.ElectionVote.repository.PollingPlaceRepository;
 import Backend.ElectionVote.service.PollingPlaceService;
 import Backend.ElectionVote.utility.PollingPlaceCodeGenerator;
+import Backend.ElectionVote.utility.PollingPlaceSpecs;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,7 +33,7 @@ import static org.springframework.http.HttpStatus.*;
 @RequiredArgsConstructor
 public class PollingPlaceServiceImplementation implements PollingPlaceService {
 
-    private final PollingPlaceRepository placeRepo;
+    private final PollingPlaceRepository pollingPlaceRepository;
     private final PollingCenterRepository centerRepo;
     private final PollingPlaceMapper mapper = new PollingPlaceMapper();
 
@@ -46,7 +55,7 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
 
         // 3) Determine next placeNumber inside this center (1, 2, 3, ...)
         List<PollingPlace> existing =
-                placeRepo.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(center.getCenterId());
+                pollingPlaceRepository.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(center.getCenterId());
 
         int nextNumber = existing.isEmpty()
                 ? 1
@@ -57,10 +66,32 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
 
         // 5) Build & save entity
         PollingPlace entity = mapper.toEntity(req, center, nextNumber, code);
-        PollingPlace saved = placeRepo.save(entity);
+        PollingPlace saved = pollingPlaceRepository.save(entity);
 
         return mapper.toDTO(saved);
     }
+
+    @Override
+    @Transactional
+    public PollingPlaceDto update(UUID id, PollingPlaceUpdateRequest req) {
+        PollingPlace place = pollingPlaceRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Polling place not found: " + id));
+
+        // ✅ Only allow updating the human label. Everything else is immutable.
+        String label = req.getLabel();
+        if (label != null) {
+            label = label.trim();
+            if (label.isBlank()) label = null;
+        }
+        place.setLabel(label);
+        if (req.getActive() != null) place.setActive(req.getActive());
+
+        // save (safe even if JPA dirty-checking would persist automatically)
+        PollingPlace saved = pollingPlaceRepository.save(place);
+
+        return mapper.toDTO(saved);
+    }
+
 
     /**
      * Generate a unique polling place code using district + center name.
@@ -70,7 +101,7 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
         int maxAttempts = 5;
         for (int i = 0; i < maxAttempts; i++) {
             String candidate = PollingPlaceCodeGenerator.generateCode(district, center);
-            if (placeRepo.findByCode(candidate).isEmpty()) {
+            if (pollingPlaceRepository.findByCode(candidate).isEmpty()) {
                 return candidate;
             }
         }
@@ -86,7 +117,7 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
     @Override
     @Transactional(readOnly = true)
     public PollingPlaceDto get(UUID id) {
-        return placeRepo.findById(id)
+        return pollingPlaceRepository.findById(id)
                 .map(mapper::toDTO)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling place not found"));
     }
@@ -97,22 +128,22 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
     @Override
     @Transactional(readOnly = true)
     public List<PollingPlaceDto> listByCenter(UUID centerId) {
-        return placeRepo.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(centerId)
+        return pollingPlaceRepository.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(centerId)
                 .stream()
                 .map(mapper::toDTO)
                 .toList();
     }
 
-    // ---------------------------------------------------------------------
-    // DEACTIVATE (soft-disable a place)
-    // ---------------------------------------------------------------------
+
     @Override
     @Transactional
-    public PollingPlaceDto deactivate(UUID id) {
-        PollingPlace p = placeRepo.findById(id)
+    public PollingPlaceDto setActive(UUID id, boolean active) {
+        PollingPlace p = pollingPlaceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling place not found"));
-        p.setActive(false);
-        PollingPlace saved = placeRepo.save(p);
+
+        p.setActive(active);
+
+        PollingPlace saved = pollingPlaceRepository.save(p);
         return mapper.toDTO(saved);
     }
 
@@ -121,12 +152,11 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
     // ---------------------------------------------------------------------
     @Transactional
     public void delete(UUID id) {
-        PollingPlace p = placeRepo.findById(id)
+        PollingPlace p = pollingPlaceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling place not found"));
 
         UUID centerId = p.getPollingCenter().getCenterId();
-
-        placeRepo.delete(p);
+        pollingPlaceRepository.delete(p);
 
         // After deleting/merging, re-sequence placeNumber for remaining places (1,2,3,...)
         resequencePlaceNumbers(centerId);
@@ -143,7 +173,7 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
      *    want active places numbered, filter by place.isActive().
      */
     private void resequencePlaceNumbers(UUID centerId) {
-        List<PollingPlace> places = placeRepo.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(centerId);
+        List<PollingPlace> places = pollingPlaceRepository.findByPollingCenter_CenterIdOrderByPlaceNumberAsc(centerId);
 
         int seq = 1;
         for (PollingPlace place : places) {
@@ -156,6 +186,38 @@ public class PollingPlaceServiceImplementation implements PollingPlaceService {
             seq++;
         }
 
-        placeRepo.saveAll(places);
+        pollingPlaceRepository.saveAll(places);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PollingPlaceDto> list(
+            int page,
+            int size,
+            String q,
+            UUID countyId,
+            UUID districtId,
+            UUID centerId,
+            Boolean active
+    ) {
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by("pollingCenter.centerName").ascending()
+                        .and(Sort.by("placeNumber").ascending())
+        );
+
+        return pollingPlaceRepository
+                .findAll(
+                        PollingPlaceSpecs.filter(
+                                q, countyId, districtId, centerId, active
+                        ),
+                        pageable
+                )
+                .map(mapper::toDTO);
+    }
+
+
+
+
 }

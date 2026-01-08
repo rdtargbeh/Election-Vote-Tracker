@@ -27,6 +27,13 @@ public class VoteSubmissionDto {
     private String centerCode;
     private String centerName;
 
+    // contest context
+    private UUID contestId;
+    private String contestName;
+    private String contestCategory;   // store as String for front-end convenience
+    private String contestScopeType;  // store as String for front-end convenience
+
+
     // Polling Place
     private UUID placeId;
     private String placeCode;
@@ -44,9 +51,16 @@ public class VoteSubmissionDto {
 
     private Integer ballotsCast;
     private Integer invalidBallots;
-    private Integer blankBallots;
+    private Integer unmarkedBallots;
     private Integer rejectedBallots;
     private Integer spoiledBallots;
+    private Integer unusedBallots;
+
+    // Allocation context (read-only, derived from allocation tables)
+    private Integer registeredVoters;   // from place allocation (or center fallback)
+    private Integer ballotsIssued;      // from place allocation (or center fallback)
+    private String allocationSource;    // "PLACE" or "CENTER" (or "NONE")
+
 
     private VoteStatus status;
     private String comments;

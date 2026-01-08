@@ -2,6 +2,7 @@ package Backend.ElectionVote.controller;
 
 import Backend.ElectionVote.dto.DistrictDto;
 import Backend.ElectionVote.dto.DistrictRequest;
+import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.DistrictService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,17 +20,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DistrictController {
 
-    @Autowired
-    private DistrictService service;
+    private final DistrictService service;
+    private final AuthorizationService authz;
 
     @PostMapping
     public ResponseEntity<DistrictDto> create(@Valid @RequestBody DistrictRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
         return ResponseEntity.ok(service.create(req));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<DistrictDto> update(@PathVariable UUID id,
                                               @Valid @RequestBody DistrictRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
         return ResponseEntity.ok(service.update(id, req));
     }
 
@@ -40,6 +43,7 @@ public class DistrictController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        authz.requireNecAdminOrPlatformAdmin();
         service.delete(id);
         return ResponseEntity.noContent().build();
     }

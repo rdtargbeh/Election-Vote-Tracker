@@ -35,4 +35,20 @@ public final class CandidateSpecs {
                         ? cb.conjunction()
                         : cb.equal(root.get("isActive"), active);
     }
+
+    // CandidateSpecs.java
+    public static Specification<Candidate> independentEquals(Boolean independent) {
+        return (root, query, cb) -> {
+            if (independent == null) return cb.conjunction();
+
+            // ✅ Independent == true means party is NULL
+            if (Boolean.TRUE.equals(independent)) {
+                return cb.isNull(root.get("party"));
+            }
+
+            // ✅ Independent == false means party is NOT NULL
+            return cb.isNotNull(root.get("party"));
+        };
+    }
+
 }

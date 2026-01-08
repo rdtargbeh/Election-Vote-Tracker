@@ -5,6 +5,8 @@ import Backend.ElectionVote.entity.ElectionCandidate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;      // ✅ Spring Data pageable
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -27,13 +29,31 @@ public interface ElectionCandidateRepository extends JpaRepository<ElectionCandi
     // Explicit pageable findAll (optional — JpaRepository already provides this)
     Page<ElectionCandidate> findAll(Pageable pageable);
 
+
     // Variant for the "center is null" (national/district-scoped) case
     boolean existsByElection_ElectionIdAndCandidate_CandidateIdAndPollingCenterIsNull(
             UUID electionId,
             UUID candidateId
     );
 
+    /**
+     * Readiness: Count candidates assigned to an election.
+     * ✅ Used by Overview -> "Candidates assigned"
+     *
+     * @param electionId election scope
+     * @return number of ElectionCandidate rows for the election
+     */
+
+    @Query(""" 
+            select count(ec)
+            from ElectionCandidate ec 
+            where ec.election.electionId = :electionId """)
+    long countByElectionId(@Param("electionId") UUID electionId);
+
     // Find all for an election ordered by candidate full name (used by service.listByElection)
     List<ElectionCandidate> findByElection_ElectionIdOrderByCandidate_FullName(UUID electionId);
+
+
+
 }
 

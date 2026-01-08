@@ -13,6 +13,6 @@ import lombok.Setter;
 public class UserUpdateRoleRequest {
 
     /** We treat roleName as immutable; allow updating description only. */
-    @Size(max = 150)
+    @Size(max = 250)
     private String description;
 }

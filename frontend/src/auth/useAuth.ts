@@ -4,7 +4,7 @@ import { http, getOrgId } from "../api/http";
 import type { DashboardMode, UserDto } from "./types";
 import {
   computeCapabilities,
-  computeDashboardMode,
+  // computeDashboardMode,
   type Capabilities,
 } from "../utils/permissions";
 

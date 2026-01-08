@@ -1,6 +1,6 @@
 // src/shared/services/systemDashboardService.ts
 import { http } from "../../api/http";
-import type { PageResponse } from "../types/api";
+import type { PageResponse } from "../../auth/api";
 
 // SYSTEM dashboard endpoints must NOT require org context
 const SYS = { orgMode: "none" as const };

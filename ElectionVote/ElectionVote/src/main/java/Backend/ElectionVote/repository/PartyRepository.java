@@ -36,5 +36,4 @@ public interface PartyRepository extends JpaRepository<Party, UUID> {
 
 
 
-
 }

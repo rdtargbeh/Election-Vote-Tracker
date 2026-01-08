@@ -1,3 +1,4 @@
+
 package Backend.ElectionVote.entity;
 
 import jakarta.persistence.*;
@@ -10,27 +11,13 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 
-/**
- * Vote tally per candidate for an election/org.
- */
-
-
+@Entity
+@Table(name = "vote_tally")
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-
-@Entity
-@Table(
-        name = "vote_tally",
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uq_org_election_candidate",
-                        columnNames = {"org_id", "election_id", "candidate_id"}
-                )
-        }
-)
 public class VoteTally {
 
     @Id
@@ -49,21 +36,44 @@ public class VoteTally {
             foreignKey = @ForeignKey(name = "vote_tally_org_id_fkey"))
     private Organization organization;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "party_id",
-            foreignKey = @ForeignKey(name = "vote_tally_party_id_fkey"))
-    private Party party; // nullable (ON DELETE SET NULL)
+    // -------------------------
+    // ✅ WRITE-SAFE FK COLUMNS
+    // -------------------------
+
+    @Column(name = "contest_id", nullable = false)
+    private UUID contestId;
+
+    @Column(name = "elect_id", nullable = false) // DB requires NOT NULL
+    private UUID electId;
+
+    @Column(name = "party_id") // optional (can be null if independent)
+    private UUID partyId;
+
+    // -------------------------
+    // ✅ READ-ONLY RELATIONSHIPS
+    // -------------------------
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "candidate_id",
-            foreignKey = @ForeignKey(name = "vote_tally_candidate_id_fkey"))
-    private Candidate candidate; // nullable (ON DELETE SET NULL)
+    @JoinColumn(name = "contest_id", insertable = false, updatable = false)
+    private Contest contest;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "elect_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "vote_tally_elect_id_fkey"))
+    private ElectionCandidate electionCandidate;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns({
+            @JoinColumn(name = "election_id", referencedColumnName = "election_id", insertable = false, updatable = false),
+            @JoinColumn(name = "party_id", referencedColumnName = "party_id", insertable = false, updatable = false)
+    })
+    private ElectionParty electionParty;
+
 
     @NotNull
     @Min(0)
     @Column(name = "vote_count", nullable = false)
     private Integer voteCount;
-
 
     @Column(name = "last_recomputed_at", nullable = false)
     private LocalDateTime lastRecomputedAt;
@@ -71,14 +81,16 @@ public class VoteTally {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recomputed_by",
             foreignKey = @ForeignKey(name = "vote_tally_recomputed_by_fkey"))
-    private SystemUser recomputedBy; // nullable if system job
+    private SystemUser recomputedBy;
 
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
     @PrePersist
-    public  void prePersist(){
+    public void prePersist() {
         if (lastUpdated == null) lastUpdated = LocalDateTime.now();
     }
-
 }
+
+
+

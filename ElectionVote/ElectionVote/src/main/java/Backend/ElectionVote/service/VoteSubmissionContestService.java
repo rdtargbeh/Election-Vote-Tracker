@@ -1,7 +1,12 @@
 package Backend.ElectionVote.service;
 
 
+import Backend.ElectionVote.dto.VoteSubmissionContestBulkRequest;
+import Backend.ElectionVote.dto.VoteSubmissionContestCreateRequest;
+import Backend.ElectionVote.dto.VoteSubmissionContestDto;
+import Backend.ElectionVote.dto.VoteSubmissionContestUpdateRequest;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -22,4 +27,24 @@ public interface VoteSubmissionContestService {
      * Returns total rows normalized (sum over submissions).
      */
     int normalizeVerifiedSubmissionsForElection(UUID electionId);
+
+    ///
+    VoteSubmissionContestDto createOrUpdate(VoteSubmissionContestCreateRequest req);
+
+    VoteSubmissionContestDto update(UUID scvId, VoteSubmissionContestUpdateRequest req);
+
+    VoteSubmissionContestDto get(UUID scvId);
+
+    List<VoteSubmissionContestDto> listBySubmission(UUID submissionId);
+
+    List<VoteSubmissionContestDto> listBySubmissionAndContest(UUID submissionId, UUID contestId);
+
+    void delete(UUID scvId);
+
+    /**
+     * Replace all votes for this submission+contest (atomic user experience).
+     * Common pattern: user submits contest selections once.
+     */
+    List<VoteSubmissionContestDto> replaceContestVotes(VoteSubmissionContestBulkRequest req);
+
 }

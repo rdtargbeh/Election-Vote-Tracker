@@ -1,6 +1,7 @@
 // src/shared/services/profileService.ts
+
 import { apiClient } from "../lib/apiClient";
-import type { UserDto } from "../types/userTypes";
+import type { UserDto } from "../../auth/userTypes";
 
 type MyProfileUpdatePayload = {
   firstName: string;

@@ -157,34 +157,6 @@ public class OrgMembershipServiceImplementation implements OrgMembershipService 
     }
 
 
-
-//    @Override
-//    public void setRoleInTenant(UUID userId, String roleName) {
-//        // Only tenant ADMIN or platform admin may change membership roles
-//        authz.requireAny("ADMIN","SYSTEM_ADMIN");
-//
-//        UUID orgId = requireTenant();
-//        OrgMembership m = orgMembershipRepository.findByOrganization_OrgIdAndUser_UserId(orgId, userId)
-//                .orElseThrow(() -> new NoSuchElementException("Membership not found in current tenant"));
-//
-//        // Prevent non-platform admin from promoting someone to ADMIN
-//        if ("ADMIN".equalsIgnoreCase(roleName) && !callerIsPlatformAdmin()) {
-//            throw new IllegalArgumentException("Only platform admin can assign ADMIN role");
-//        }
-//
-//        String oldRole = m.getRoleName();
-//        m.setRoleName(roleName);
-//
-//        // Audit
-//        try {
-//            UUID actor = currentUserProvider.currentUserId();
-//            String desc = "Changed membership role: user=" + userId + " from=" + oldRole + " to=" + roleName;
-//            jdbc.update("INSERT INTO audit_log (log_id, org_id, user_id, activity_type, entity_affected, action_description) VALUES (gen_random_uuid(), ?, ?, ?, ?, ?)",
-//                    new Object[]{ orgId, actor, "MEMBERSHIP_ROLE_CHANGE", "org_membership", desc });
-//        } catch (Exception ignored) {}
-//    }
-
-
     @Override
     public void setEnabledInTenant(UUID userId, boolean enabled) {
         // Only tenant ADMIN or platform admin may enable/disable membership

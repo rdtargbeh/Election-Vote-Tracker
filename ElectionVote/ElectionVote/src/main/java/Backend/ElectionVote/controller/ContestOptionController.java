@@ -2,9 +2,14 @@ package Backend.ElectionVote.controller;
 
 
 
+import Backend.ElectionVote.dto.ContestCandidateBulkAssignRequest;
+import Backend.ElectionVote.dto.ContestOptionCreateRequest;
 import Backend.ElectionVote.dto.ContestOptionDto;
+import Backend.ElectionVote.dto.ContestOptionUpdateRequest;
 import Backend.ElectionVote.service.ContestOptionService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,29 +27,37 @@ public class ContestOptionController {
 
     private final ContestOptionService optionService;
 
+
     @PostMapping
-    public ResponseEntity<ContestOptionDto> create(@RequestBody ContestOptionDto dto) {
-        ContestOptionDto created = optionService.createOption(dto);
-        return ResponseEntity.ok(created);
+    public ResponseEntity<ContestOptionDto> create(@Valid @RequestBody ContestOptionCreateRequest req) {
+        ContestOptionDto created = optionService.createOption(req);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
+
 
     @GetMapping("/{optionId}")
     public ResponseEntity<ContestOptionDto> get(@PathVariable UUID optionId) {
         return ResponseEntity.ok(optionService.getOption(optionId));
     }
 
-    @GetMapping
-    public ResponseEntity<List<ContestOptionDto>> listByContest(@RequestParam UUID contestId,
-                                                                @RequestParam(defaultValue = "true") boolean onlyActive) {
+
+    @GetMapping("/contest/{contestId}")
+    public ResponseEntity<List<ContestOptionDto>> listByContest(
+            @PathVariable UUID contestId,
+            @RequestParam(defaultValue = "true") boolean onlyActive
+    ) {
         List<ContestOptionDto> list = optionService.listByContest(contestId, onlyActive);
         return ResponseEntity.ok(list);
     }
 
     @PutMapping("/{optionId}")
-    public ResponseEntity<ContestOptionDto> update(@PathVariable UUID optionId, @RequestBody ContestOptionDto dto) {
-        ContestOptionDto updated = optionService.updateOption(optionId, dto);
-        return ResponseEntity.ok(updated);
+    public ResponseEntity<ContestOptionDto> update(
+            @PathVariable UUID optionId,
+            @Valid @RequestBody ContestOptionUpdateRequest req
+    ) {
+        return ResponseEntity.ok(optionService.updateOption(optionId, req));
     }
+
 
     @DeleteMapping("/{optionId}")
     public ResponseEntity<Void> delete(@PathVariable UUID optionId) {
@@ -56,4 +69,15 @@ public class ContestOptionController {
     public ResponseEntity<List<ContestOptionDto>> byCandidate(@PathVariable UUID candidateId) {
         return ResponseEntity.ok(optionService.findByCandidateId(candidateId));
     }
+
+    /**
+     * Bulk attach candidates to a contest (best UX: checkbox list -> submit once).
+     */
+    @PostMapping("/bulk-candidates")
+    public ResponseEntity<List<ContestOptionDto>> bulkAssignCandidates(
+            @Valid @RequestBody ContestCandidateBulkAssignRequest req
+    ) {
+        return ResponseEntity.ok(optionService.bulkAssignCandidates(req));
+    }
+
 }

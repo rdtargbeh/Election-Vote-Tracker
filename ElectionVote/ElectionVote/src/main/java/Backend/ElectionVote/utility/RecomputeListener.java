@@ -13,6 +13,8 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
 
@@ -62,6 +64,7 @@ public class RecomputeListener {
 
     @Async("voteExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onRecomputeEvent(RecomputeEvent ev) {
         final String key = ev.getOrgId() + ":" + ev.getElectionId();
         log.info("Received RecomputeEvent for {}", key);
@@ -156,41 +159,7 @@ public class RecomputeListener {
         }
     }
 
-//    private boolean tryRunWithRetries(java.util.UUID orgId, java.util.UUID electionId, java.util.UUID actorUserId, int attempt) {
-//        log.debug("Recompute attempt #{}/{} for {}/{}", attempt + 1, MAX_RETRIES, orgId, electionId);
-//
-//        try {
-//            // THIS is where the service is invoked. Ensure your service throws AdvisoryLockNotAcquiredException
-//            // when it cannot acquire the advisory lock.
-//            List<?> result = voteTallyService.recomputeForElection(orgId, electionId, actorUserId);
-//
-//            int count = result == null ? 0 : result.size();
-//            log.info("Recompute succeeded for org={} election={} produced {} tallies (attempt #{})", orgId, electionId, count, attempt + 1);
-//            auditLogService.log(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally", "Recompute succeeded for election " + electionId + " produced " + count + " tallies");
-//            return true;
-//        } catch (AdvisoryLockNotAcquiredException lockEx) {
-//            // If we've exhausted attempts, record failure. Otherwise schedule next attempt.
-//            if (attempt >= MAX_RETRIES - 1) {
-//                log.error("Recompute for {}/{} could not acquire advisory lock after {} attempts", orgId, electionId, MAX_RETRIES);
-//                return false;
-//            }
-//            long delayMillis = computeBackoffMillis(attempt);
-//            log.warn("Advisory lock not acquired for {}/{}; scheduling retry #{} after {}ms", orgId, electionId, attempt + 2, delayMillis);
-//            scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
-//            return false;
-//        } catch (Exception ex) {
-//            if (attempt >= MAX_RETRIES - 1) {
-//                log.error("Recompute for {}/{} failed after {} attempts: {}", orgId, electionId, MAX_RETRIES, ex.getMessage(), ex);
-//                auditLogService.log(orgId, actorUserId, ActivityType.TALLY_RECOMPUTE, "VoteTally", "Recompute failed with error: " + ex.getMessage());
-//                return false;
-//            } else {
-//                long delayMillis = computeBackoffMillis(attempt);
-//                log.warn("Recompute attempt #{} for {}/{} failed: {}. Retrying in {}ms", attempt + 1, orgId, electionId, ex.getMessage(), delayMillis);
-//                scheduleRetry(orgId, electionId, actorUserId, attempt + 1, delayMillis);
-//                return false;
-//            }
-//        }
-//    }
+
 
     private void scheduleRetry(java.util.UUID orgId, java.util.UUID electionId, java.util.UUID actorUserId, int nextAttempt, long delayMs) {
         Instant runAt = Instant.now().plusMillis(delayMs);

@@ -4,7 +4,7 @@ import { useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/lib/apiClient";
 import { useAuthStore } from "../../shared/store/authStore";
-import type { ElectionDto } from "../../shared/types/api";
+import type { ElectionDto } from "../../auth/api";
 
 // ✅ ADD
 // import UserProfileModal from "../../pages/profile/UserProfileModal";

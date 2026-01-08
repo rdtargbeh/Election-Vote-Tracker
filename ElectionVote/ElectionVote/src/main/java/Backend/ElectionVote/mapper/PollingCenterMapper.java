@@ -25,6 +25,7 @@ public class PollingCenterMapper {
                 .countyName(c != null ? c.getCountyName() : null)
                 .latitude(pc.getLatitude())
                 .longitude(pc.getLongitude())
+                .createdAt(pc.getCreatedAt())
                 .build();
     }
 

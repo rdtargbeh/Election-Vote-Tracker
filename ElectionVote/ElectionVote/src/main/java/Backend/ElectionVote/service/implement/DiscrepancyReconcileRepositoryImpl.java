@@ -53,4 +53,35 @@ public class DiscrepancyReconcileRepositoryImpl implements DiscrepancyReconcileR
         }
         return out;
     }
+
+
+    /**
+     * Integrity helper: Count mismatch rows used by reconciliation logic.
+     * Mirrors findMismatches(...) but returns a count for fast Overview stats.
+     *
+     * @param orgId tenant scope
+     * @param electionId election scope
+     * @return number of centers where party stats differ from official stats
+     */
+    @Override
+    public long countMismatches(UUID orgId, UUID electionId) {
+        String sql = """
+            SELECT COUNT(*)
+            FROM v_center_stats_party    p
+            JOIN v_center_stats_official o
+              ON o.election_id = p.election_id AND o.center_id = p.center_id
+            WHERE p.org_id = :orgId
+              AND p.election_id = :electionId
+              AND (p.valid_votes      IS DISTINCT FROM o.valid_votes
+                   OR p.invalid_total IS DISTINCT FROM o.invalid_total)
+            """;
+
+        Object result = em.createNativeQuery(sql)
+                .setParameter("orgId", orgId)
+                .setParameter("electionId", electionId)
+                .getSingleResult();
+
+        return (result instanceof Number n) ? n.longValue() : 0L;
+    }
+
 }

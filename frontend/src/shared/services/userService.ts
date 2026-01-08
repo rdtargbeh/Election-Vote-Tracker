@@ -9,15 +9,7 @@ import type {
   UserDto,
   FetchUsersResponse,
   RoleName,
-} from "../types/userTypes";
-
-/**
- * /users/me should NOT require org for SYSTEM_ADMIN.
- * Backend should decide what to return when org is missing.
- */
-// export async function fetchMe() {
-//   return http.get<any>("/users/me", { orgMode: "auto" });
-// }
+} from "../../auth/userTypes";
 
 /**
  * Multi-tenant header helper:

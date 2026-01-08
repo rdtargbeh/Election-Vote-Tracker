@@ -22,9 +22,11 @@ import java.util.UUID;
  *  - Tenants simply see/use this list when recording votes.
  */
 @RestController
-@RequestMapping("/api/elections/parties")
+@RequestMapping("/api/elections/{electionId}/parties")
 @RequiredArgsConstructor
 public class ElectionPartyController {
+
+
 
     private final ElectionPartyService electionPartyService;
     private final AuthorizationService authz;
@@ -34,20 +36,17 @@ public class ElectionPartyController {
      *
      * Security: Platform-level admin only (central NEC control).
      */
-    @PostMapping("/{electionId}/parties")
-//    @PostMapping
+    @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ElectionPartyDto addPartyToElection(
             @PathVariable UUID electionId,
             @Valid @RequestBody ElectionPartyAssignRequest req) {
 
-        // Ensure body electionId matches path, or override from path
         req.setElectionId(electionId);
-        // Platform-level auth
-        authz.requirePlatformAdmin();
-
+        authz.requireNecAdminOrPlatformAdmin();
         return electionPartyService.addPartyToElection(req);
     }
+
 
 
     /**
@@ -73,7 +72,7 @@ public class ElectionPartyController {
             @PathVariable UUID partyId,
             @Valid @RequestBody ElectionPartyUpdateRequest req) {
 
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return electionPartyService.updateElectionParty(electionId, partyId, req);
     }
 
@@ -88,8 +87,20 @@ public class ElectionPartyController {
             @PathVariable UUID electionId,
             @PathVariable UUID partyId) {
 
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         electionPartyService.removePartyFromElection(electionId, partyId);
     }
+
+    @PatchMapping("/{partyId}/qualification")
+    public ElectionPartyDto setQualification(
+            @RequestParam UUID electionId,
+            @PathVariable UUID partyId,
+            @RequestParam boolean qualified) {
+
+        authz.requireNecAdminOrPlatformAdmin();
+        return electionPartyService.setQualificationStatus(
+                electionId, partyId, qualified);
+    }
+
 
 }

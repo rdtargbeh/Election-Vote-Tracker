@@ -20,5 +20,15 @@ public interface DiscrepancyRepository extends JpaRepository<Discrepancy, UUID>,
     // for OPEN discrepancies (any org)
     List<Discrepancy> findByElection_ElectionIdAndStatus(UUID electionId, DiscrepancyStatus status);
 
+    /**
+     * Integrity Summary: Count OPEN discrepancies for an election.
+     * ✅ Used by Overview -> "Open discrepancies"
+     *
+     * @param electionId election scope
+     * @param status usually DiscrepancyStatus.OPEN
+     * @return count of discrepancies by status
+     */
+    long countByElection_ElectionIdAndStatus(UUID electionId, DiscrepancyStatus status);
+
 }
 

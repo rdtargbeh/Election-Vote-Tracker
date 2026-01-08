@@ -189,6 +189,19 @@ export function Note({ title, bullets }: { title: string; bullets: string[] }) {
  * - Adds sticky header (nice on mid widths)
  * - Allows some cells to wrap (remove nowrap from td, keep header nowrap)
  */
+
+/* -----------------------------------------------------------------------
+   OPTIONAL: use these classes on badges & icon buttons to keep rows tight.
+
+   Status badge:
+   className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700
+              px-1.5 py-0 text-[11px] leading-none font-semibold"
+
+   Icon button (edit/disable):
+   className="h-6 w-6 p-0 inline-flex items-center justify-center rounded-md hover:bg-slate-100"
+   Icon size: 14
+------------------------------------------------------------------------ */
+
 export function Table({
   columns,
   rows,

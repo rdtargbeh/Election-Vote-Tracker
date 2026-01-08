@@ -36,6 +36,8 @@ import java.util.UUID;
 @Table(
         name = "vote_submission",
         indexes = {
+                // ✅ include contest_id for faster contest-scoped operations
+                @Index(name = "idx_vs_org_election_contest_place_status", columnList = "org_id,election_id,contest_id,place_id,status"),
                 @Index(name = "idx_vs_org_election_center_status", columnList = "org_id,election_id,center_id,status"),
                 @Index(name = "idx_vs_submission_time", columnList = "submission_time"),
                 @Index(name = "idx_vs_submission_hash", columnList = "submission_hash")
@@ -66,6 +68,25 @@ public class VoteSubmission extends AuditBaseEntity {
             foreignKey = @ForeignKey(name = "fk_vote_submission_place"))
     private PollingPlace pollingPlace;
 
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "county_id", nullable = false,
+//            foreignKey = @ForeignKey(name = "fk_district_county"))
+//    private County county;
+//
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "district_id", nullable = false,
+//            foreignKey = @ForeignKey(name = "fk_center_district"))
+//    private District district;
+
+    @Column(name = "contest_id", nullable = false)
+    private UUID contestId;
+
+    // read-only convenience
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contest_id", insertable = false, updatable = false)
+    private Contest contest;
+
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id", nullable = false)
     private SystemUser agent;
@@ -81,12 +102,14 @@ public class VoteSubmission extends AuditBaseEntity {
     private Integer ballotsCast;
     @Column(name = "invalid_ballots", nullable = false)
     private Integer invalidBallots = 0;
-    @Column(name = "blank_ballots", nullable = false)
-    private Integer blankBallots = 0;
+    @Column(name = "unmarked_ballots", nullable = false)
+    private Integer unmarkedBallots = 0;   // blank-in-box (cast but no mark)
     @Column(name = "rejected_ballots", nullable = false)
     private Integer rejectedBallots = 0;
     @Column(name = "spoiled_ballots", nullable = false)
     private Integer spoiledBallots = 0;
+    @Column(name = "unused_ballots", nullable = false)
+    private Integer unusedBallots = 0; // leftover (not cast)
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)

@@ -3,10 +3,12 @@ package Backend.ElectionVote.controller;
 
 import Backend.ElectionVote.dto.PollingPlaceCreateRequest;
 import Backend.ElectionVote.dto.PollingPlaceDto;
+import Backend.ElectionVote.dto.PollingPlaceUpdateRequest;
 import Backend.ElectionVote.security.AuthorizationService;
 import Backend.ElectionVote.service.PollingPlaceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,8 +32,15 @@ public class PollingPlaceController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PollingPlaceDto create(@Valid @RequestBody PollingPlaceCreateRequest req) {
-//        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return pollingPlaceService.create(req);
+    }
+
+    @PutMapping("/{id}")
+    public PollingPlaceDto update(@PathVariable UUID id,
+                                  @Valid @RequestBody PollingPlaceUpdateRequest req) {
+         authz.requireNecAdminOrPlatformAdmin(); /// (SYSTEM/NEC)
+        return pollingPlaceService.update(id, req);
     }
 
     /**
@@ -53,16 +62,37 @@ public class PollingPlaceController {
         return pollingPlaceService.listByCenter(centerId);
     }
 
+    @PutMapping("/{id}/active")
+    public PollingPlaceDto setActive(@PathVariable UUID id,
+                                     @RequestParam boolean active) {
+        authz.requireNecAdminOrPlatformAdmin(); // SYSTEM/NEC
+        return pollingPlaceService.setActive(id, active);
+    }
+
+
     /**
-     * Deactivate a polling place (soft delete).
-     *
-     * This sets is_active = false but keeps the row and code for history.
-     * If you expose hard delete, you can add a separate DELETE endpoint.
+     * HARD delete (permanent)
      */
     @DeleteMapping("/{id}")
-    public PollingPlaceDto deactivate(@PathVariable("id") UUID id) {
-        return pollingPlaceService.deactivate(id);
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID id) {
+        authz.requireNecAdminOrPlatformAdmin(); // SYSTEM / NEC
+        pollingPlaceService.delete(id);
     }
+
+    @GetMapping
+    public Page<PollingPlaceDto> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) UUID countyId,
+            @RequestParam(required = false) UUID districtId,
+            @RequestParam(required = false) UUID centerId,
+            @RequestParam(required = false) Boolean active
+    ) {
+        return pollingPlaceService.list(page, size, q, countyId, districtId, centerId, active);
+    }
+
 
 
 }

@@ -73,22 +73,3 @@ public class PollingCenter {
 }
 
 
-//public class PollingCenter {
-//    @Id
-//    @GeneratedValue
-//    @UuidGenerator
-//    @Column(name = "center_id", nullable = false, updatable = false)
-//    private UUID centerId;
-//
-//    @Column(name = "center_name", nullable = false, length = 150)
-//    private String centerName;
-//
-//    @Column(name = "code", nullable = false, unique = true, length = 50)
-//    private String code;
-//
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "district_id", nullable = false,
-//            foreignKey = @ForeignKey(name = "fk_center_district"))
-//    private District district;
-//
-//}

@@ -17,4 +17,6 @@ public class VoteSubmissionRankingDto {
     private UUID contestId;
     private JsonNode ranking;
     private LocalDateTime dateCreated;
+
+    private String contestName;
 }

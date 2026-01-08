@@ -28,9 +28,28 @@ public class PartyController {
     private final PartyService partyService;
 
 
-    @GetMapping("/{id}")
-    public ResponseEntity<PartyDto> get(@PathVariable UUID id) {
-        Optional<PartyDto> dto = partyService.get(id);
+    @PostMapping
+    public ResponseEntity<PartyDto> create(@Valid @RequestBody PartyCreateRequest req) {
+
+        authz.requireNecAdminOrPlatformAdmin();
+        PartyDto created = partyService.create(req);
+
+        // Return result with HTTP 201
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(created);
+    }
+
+    @PutMapping("/{partyId}")
+    public PartyDto update(@PathVariable UUID partyId, @Valid @RequestBody PartyUpdateRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
+        return partyService.update(partyId, req);
+    }
+
+
+    @GetMapping("/{partyId}")
+    public ResponseEntity<PartyDto> get(@PathVariable UUID partyId) {
+        Optional<PartyDto> dto = partyService.get(partyId);
         return dto.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -46,15 +65,12 @@ public class PartyController {
         return partyService.search(new PartySearchRequest(q), pageable);
     }
 
-    @PutMapping("/{id}")
-    public PartyDto update(@PathVariable UUID id, @Valid @RequestBody PartyUpdateRequest req) {
-        return partyService.update(id, req);
-    }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{partyId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID id) {
-        partyService.delete(id);
+    public void delete(@PathVariable UUID partyId) {
+        authz.requireNecAdminOrPlatformAdmin();
+        partyService.delete(partyId);
     }
 
 
