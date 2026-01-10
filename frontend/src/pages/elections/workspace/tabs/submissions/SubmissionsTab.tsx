@@ -1,7 +1,7 @@
-// src/pages/elections/workspace/tabs/submissions/SubmissionsTab.tsx
+// ✅ FILE: src/pages/elections/workspace/tabs/submissions/SubmissionsTab.tsx
 //
 // ✅ Tenant-scoped VoteSubmissions table
-// ✅ SYSTEM can switch tenant via org dropdown
+// ✅ SYSTEM can switch tenant via org dropdown  ✅ (FIXED endpoint to /orgs via organizationService)
 // ✅ Added allocation read-only fields on row: registeredVoters, ballotsIssued, allocationSource
 // ✅ Verify button opens modal: verifier name + comment + accept/reject
 // ✅ Verify active for ALL tenant dashboards (tenant-level entity)
@@ -16,19 +16,28 @@
 // ✅ UI ENHANCEMENT:
 // - Active queue/tab indicator (selected tab is blue + underline pointer)
 //
-// ✅ CHANGE REQUEST (THIS TURN):
-// - Keep ONLY: PENDING, VERIFIED, REJECTED, MISSING_EVIDENCE
-// - Remove Draft + Flagged buttons
-// - Queue type updated accordingly
-// - Status param passed exactly as queue, except MISSING_EVIDENCE -> undefined (unchanged behavior)
+// ✅ CHANGE REQUEST (UPDATED):
+// - Include: PENDING, VERIFIED, REJECTED, FLAGGED, DRAFT, MISSING_EVIDENCE
+//
+// ✅ NEW FIX (FLAGGED):
+// - Flagged submissions are NOT editable (Edit stays disabled)
+// - ✅ Adds an UNFLAG button in Actions (only shown when status=FLAGGED)
+// - Uses backend flag endpoint with flagged=false (actorUserId included)
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, CheckCircle2, Trash2, Pencil, X } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  CheckCircle2,
+  Trash2,
+  Pencil,
+  X,
+  FlagOff,
+} from "lucide-react";
 
 import { useAuthStore } from "../../../../../shared/store/authStore";
 import { Panel, Badge } from "../../../shared/elections-ui";
-import { apiClient } from "../../../../../shared/lib/apiClient";
 
 import {
   listActiveElections,
@@ -57,13 +66,21 @@ import {
   searchSubmissions,
   deleteSubmission,
   verifySubmission,
+  flagSubmission, // ✅ NEW: for unflag
   type VoteSubmissionDto,
+  type VoteStatus,
 } from "../../../../../shared/services/voteSubmissionService";
 
 import { fetchMe } from "../../../../../shared/services/userService";
 import type { UserDto } from "../../../../../auth/userTypes";
 
 import SubmissionFormModal from "./SubmissionFormModal";
+
+// ✅ FIX: use your organizationService (BASE_URL="/orgs")
+import {
+  fetchOrganizations,
+  type Organization,
+} from "../../../../../shared/services/organizationService";
 
 /** ---------------- helpers ---------------- */
 function safeStr(v: any) {
@@ -108,23 +125,11 @@ function fmtAllocSource(v: any) {
   return s;
 }
 
-// ✅ only keep the queues you want in the UI
-type Queue = "PENDING" | "VERIFIED" | "REJECTED" | "MISSING_EVIDENCE";
+// ✅ queues (UPDATED to include FLAGGED + DRAFT)
+type Queue = VoteStatus | "MISSING_EVIDENCE";
 
 /** SYSTEM tenant dropdown type */
 type OrgDto = { orgId: string; orgName: string };
-
-function mapSpringPageAny<T>(p: any): {
-  items: T[];
-  page?: number;
-  totalPages?: number;
-} {
-  return {
-    items: (p?.content ?? []) as T[],
-    page: p?.number ?? p?.page ?? 0,
-    totalPages: p?.totalPages ?? p?.total_pages ?? 1,
-  };
-}
 
 export default function SubmissionsTab() {
   const qc = useQueryClient();
@@ -150,6 +155,9 @@ export default function SubmissionsTab() {
     Boolean(currentOrgId) ||
     dashboardMode === "SYSTEM" ||
     dashboardMode === "NEC";
+
+  // ✅ Unflag should be allowed for verifier-capable users (review action)
+  const canUnflag = canVerify;
 
   const [queue, setQueue] = useState<Queue>("PENDING");
 
@@ -182,27 +190,49 @@ export default function SubmissionsTab() {
   });
   const contests = contestsQ.data ?? [];
 
-  /** ---------------- SYSTEM tenant selection ---------------- */
+  /** ---------------- SYSTEM tenant selection (FIXED) ---------------- */
   const [systemSelectedOrgId, setSystemSelectedOrgId] = useState<string>("");
 
   const orgsQ = useQuery<OrgDto[]>({
     enabled: dashboardMode === "SYSTEM",
     queryKey: ["orgs", "tenant-list"],
     queryFn: async () => {
-      const res = await apiClient.get("/organizations", {
-        params: { page: 0, size: 500, active: true },
+      const res = await fetchOrganizations({
+        page: 0,
+        size: 500,
+        active: true,
+        orgType: undefined,
+        orgId: undefined,
+        search: undefined,
       });
-      return mapSpringPageAny<OrgDto>(res.data).items;
+
+      // normalize to {orgId, orgName}
+      return (res.items ?? []).map((o: Organization) => ({
+        orgId: o.orgId,
+        orgName: o.orgName,
+      }));
     },
     staleTime: 60_000,
     retry: 1,
   });
+
   const orgs = orgsQ.data ?? [];
 
   const effectiveOrgId =
     dashboardMode === "SYSTEM"
       ? systemSelectedOrgId || undefined
       : currentOrgId || undefined;
+
+  /** ---------------- Actor (for unflag) ---------------- */
+  const actorMeQ = useQuery<UserDto>({
+    enabled: Boolean(effectiveOrgId),
+    queryKey: ["users", "me", "actor", effectiveOrgId],
+    queryFn: () => fetchMe(effectiveOrgId as string),
+    staleTime: 60_000,
+    retry: 1,
+  });
+  const actorUser = actorMeQ.data ?? user;
+  const actorUserId = (actorUser as any)?.userId ?? (user as any)?.userId ?? "";
 
   /** ---------------- Filters: Contest + County -> District -> Center ---------------- */
   const [filterContest, setFilterContest] = useState<string>("");
@@ -271,6 +301,7 @@ export default function SubmissionsTab() {
     effectiveOrgId,
   ]);
 
+  // SYSTEM must pick tenant
   const submissionsEnabled = Boolean(electionId) && Boolean(effectiveOrgId);
 
   const submissionsQ = useQuery({
@@ -293,7 +324,9 @@ export default function SubmissionsTab() {
         electionId,
         page,
         size,
-        status: queue === "MISSING_EVIDENCE" ? undefined : queue,
+
+        // ✅ queue now includes DRAFT + FLAGGED directly
+        status: queue === "MISSING_EVIDENCE" ? undefined : (queue as any),
 
         contestId: filterContest || undefined,
 
@@ -379,12 +412,30 @@ export default function SubmissionsTab() {
     },
   });
 
+  /** ---------------- Unflag ---------------- */
+  const unflagM = useMutation({
+    mutationFn: async (p: { id: string }) => {
+      return flagSubmission(p.id, {
+        actorUserId,
+        flagged: false,
+        comments: undefined,
+      } as any);
+    },
+    onSuccess: async () => {
+      await refetchList();
+    },
+  });
+
+  // ✅ allow editing DRAFT too (but NOT FLAGGED)
   const canEditRow = (s: VoteSubmissionDto) => {
     const st = String((s as any).status ?? "").toUpperCase();
-    // leave your existing behavior untouched as much as possible;
-    // edit still allowed for pending-like states (REJECTED is also still "not final" in many flows)
-    return canCreate && (st === "PENDING" || st === "REJECTED");
+    return (
+      canCreate && (st === "PENDING" || st === "REJECTED" || st === "DRAFT")
+    );
   };
+
+  const isFlaggedRow = (s: VoteSubmissionDto) =>
+    String((s as any).status ?? "").toUpperCase() === "FLAGGED";
 
   // ✅ UI only: underline indicator for active queue button
   const ActiveMark = ({ on }: { on: boolean }) =>
@@ -417,6 +468,26 @@ export default function SubmissionsTab() {
               >
                 Pending
                 <ActiveMark on={queue === "PENDING"} />
+              </button>
+
+              {/* ✅ NEW: Flagged */}
+              <button
+                type="button"
+                onClick={() => setQueue("FLAGGED")}
+                style={btn(queue === "FLAGGED")}
+              >
+                Flagged
+                <ActiveMark on={queue === "FLAGGED"} />
+              </button>
+
+              {/* ✅ NEW: Draft */}
+              <button
+                type="button"
+                onClick={() => setQueue("DRAFT")}
+                style={btn(queue === "DRAFT")}
+              >
+                Draft
+                <ActiveMark on={queue === "DRAFT"} />
               </button>
 
               <button
@@ -462,7 +533,7 @@ export default function SubmissionsTab() {
 
             {/* Filters */}
             <div className="flex gap-2 items-center flex-wrap">
-              {/* SYSTEM tenant dropdown */}
+              {/* ✅ SYSTEM tenant dropdown (now uses /orgs) */}
               {dashboardMode === "SYSTEM" ? (
                 <select
                   value={systemSelectedOrgId}
@@ -675,6 +746,8 @@ export default function SubmissionsTab() {
                       ? `Place ${(s as any).placeNumber}`
                       : (s as any).placeCode ?? "—");
 
+                  const flagged = isFlaggedRow(s as any);
+
                   return (
                     <tr key={(s as any).submissionId} className="border-t">
                       <Td
@@ -720,6 +793,7 @@ export default function SubmissionsTab() {
 
                       <Td>
                         <div className="flex gap-1.5 items-center">
+                          {/* Edit (still disabled for FLAGGED by canEditRow) */}
                           <button
                             type="button"
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border bg-white ${
@@ -730,9 +804,43 @@ export default function SubmissionsTab() {
                               setEditId((s as any).submissionId);
                               setOpenEdit(true);
                             }}
+                            title={
+                              flagged
+                                ? "Flagged submissions are not editable. Unflag first."
+                                : "Edit"
+                            }
                           >
                             <Pencil size={13} />
                           </button>
+
+                          {/* ✅ Unflag button (only when status=FLAGGED) */}
+                          {flagged ? (
+                            <button
+                              type="button"
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border bg-white text-slate-800 ${
+                                !canUnflag || unflagM.isPending
+                                  ? "opacity-50"
+                                  : ""
+                              }`}
+                              disabled={!canUnflag || unflagM.isPending}
+                              onClick={() => {
+                                if (!canUnflag) return;
+                                const id = (s as any).submissionId;
+                                if (!id) return;
+                                if (
+                                  !confirm(
+                                    "Unflag this submission? It will return to normal workflow."
+                                  )
+                                )
+                                  return;
+                                unflagM.mutate({ id });
+                              }}
+                              title="Unflag"
+                            >
+                              <FlagOff size={13} />
+                              Unflag
+                            </button>
+                          ) : null}
 
                           <button
                             type="button"
@@ -748,6 +856,7 @@ export default function SubmissionsTab() {
                               setVerifyComment("");
                               setOpenVerify(true);
                             }}
+                            title="Verify"
                           >
                             <CheckCircle2 size={13} />
                             Verify
@@ -768,10 +877,17 @@ export default function SubmissionsTab() {
                                 return;
                               deleteM.mutate((s as any).submissionId);
                             }}
+                            title="Delete"
                           >
                             <Trash2 size={13} />
                           </button>
                         </div>
+
+                        {unflagM.isError && flagged ? (
+                          <div className="mt-1 text-[11px] font-bold text-red-700">
+                            {friendlyError(unflagM.error)}
+                          </div>
+                        ) : null}
                       </Td>
                     </tr>
                   );

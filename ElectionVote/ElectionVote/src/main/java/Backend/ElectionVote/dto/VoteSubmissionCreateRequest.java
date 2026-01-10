@@ -29,6 +29,7 @@ public class VoteSubmissionCreateRequest {
     private Integer unusedBallots;
 
     private String comments;
+    private Boolean draft;
 
     // optional device metadata + GPS
     private String clientIp;

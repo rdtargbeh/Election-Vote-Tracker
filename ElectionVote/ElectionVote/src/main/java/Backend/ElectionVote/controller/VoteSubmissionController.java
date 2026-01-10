@@ -1,9 +1,6 @@
 package Backend.ElectionVote.controller;
 
-import Backend.ElectionVote.dto.VoteSubmissionCreateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionDto;
-import Backend.ElectionVote.dto.VoteSubmissionUpdateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionVerifyRequest;
+import Backend.ElectionVote.dto.*;
 import Backend.ElectionVote.enums.ContestCategory;
 import Backend.ElectionVote.enums.ContestScopeType;
 import Backend.ElectionVote.enums.VoteStatus;
@@ -90,6 +87,19 @@ public class VoteSubmissionController {
     @GetMapping("/count")
     public long countVisibleSubmissions() {
         return voteSubmissionService.countVisibleSubmissions();
+    }
+
+    @PostMapping("/{id}/submit-draft")
+    public VoteSubmissionDto submitDraft(@PathVariable UUID id, HttpServletRequest request) {
+        return voteSubmissionService.submitDraft(id, request);
+    }
+
+    @PostMapping("/{id}/flag")
+    public VoteSubmissionDto flag(
+            @PathVariable UUID id,
+            @Valid @RequestBody VoteSubmissionFlagRequest req
+    ) {
+        return voteSubmissionService.flag(id, req);
     }
 
 

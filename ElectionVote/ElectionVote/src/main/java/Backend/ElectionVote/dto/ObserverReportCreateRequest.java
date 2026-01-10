@@ -14,6 +14,7 @@ public class ObserverReportCreateRequest {
 
     // Either countyId or centerId (center implies county)
     private UUID countyId;
+    private UUID districtId;
     private UUID centerId;
 
     @NotBlank private String type;       // ReportType name

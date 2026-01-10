@@ -21,6 +21,7 @@ public class ObserverReportMapper {
         Organization org = r.getOrganization();
         SystemUser obs   = r.getObserver();
         County county    = r.getCounty();
+        District district =  r.getDistrict();
         PollingCenter pc = r.getPollingCenter();
 
         Double lat = null, lon = null;
@@ -30,15 +31,25 @@ public class ObserverReportMapper {
             lat = r.getGpsLocation().getY();
         }
 
+        // Observer Name
+        String observerFullName = null;
+        if (obs != null) {
+            String fn = obs.getFirstName() != null ? obs.getFirstName().trim() : "";
+            String ln = obs.getLastName() != null ? obs.getLastName().trim() : "";
+            String full = (fn + " " + ln).trim();
+            observerFullName = full.isEmpty() ? null : full;
+        }
+
         return ObserverReportDto.builder()
                 .reportId(r.getReportId())
                 .orgId(org != null ? org.getOrgId() : null)
                 .orgName(org != null ? org.getOrgName() : null)
                 .observerId(obs != null ? obs.getUserId() : null)
-                .observerName(obs != null ? obs.getFirstName() : null)
-                .observerName(obs != null ? obs.getLastName() : null)
+                .observerName(observerFullName)
                 .countyId(county != null ? county.getCountyId() : null)
                 .countyName(county != null ? county.getCountyName() : null)
+                .districtId(district != null ? district.getDistrictId() : null)
+                .districtName(district != null ? district.getDistrictName() : null)
                 .centerId(pc != null ? pc.getCenterId() : null)
                 .centerCode(pc != null ? pc.getCode() : null)
                 .centerName(pc != null ? pc.getCenterName() : null)
@@ -53,11 +64,12 @@ public class ObserverReportMapper {
 
     public ObserverReport toEntity(ObserverReportCreateRequest req,
                                    Organization org, SystemUser observer,
-                                   County county, PollingCenter center) {
+                                   County county, PollingCenter center, District district) {
         ObserverReport r = new ObserverReport();
         r.setOrganization(org);
         r.setObserver(observer);
         r.setCounty(county);
+        r.setDistrict(district);
         r.setPollingCenter(center);
         r.setType(ReportType.valueOf(req.getType())); // validate upstream if needed
         r.setDescription(req.getDescription());
@@ -74,8 +86,9 @@ public class ObserverReportMapper {
     public void apply(ObserverReportUpdateRequest req,
                       ObserverReport r,
                       County newCounty,
-                      PollingCenter newCenter) {
+                      PollingCenter newCenter, District dist) {
         if (newCounty != null) r.setCounty(newCounty);
+        if(dist != null) r.setDistrict(dist);
         if (newCenter != null) r.setPollingCenter(newCenter);
         if (req.getType() != null) r.setType(ReportType.valueOf(req.getType()));
         if (req.getDescription() != null) r.setDescription(req.getDescription());

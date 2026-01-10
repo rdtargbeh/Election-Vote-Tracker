@@ -13,6 +13,8 @@ public class ObserverReportDto {
     private String observerName;
     private UUID countyId;
     private String countyName;
+    private UUID districtId;
+    private String districtName;
     private UUID centerId;
     private String centerCode;
     private String centerName;

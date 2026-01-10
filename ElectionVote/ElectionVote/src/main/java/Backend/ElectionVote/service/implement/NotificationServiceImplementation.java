@@ -18,6 +18,7 @@ import Backend.ElectionVote.service.NotificationSender;
 import Backend.ElectionVote.service.NotificationService;
 import Backend.ElectionVote.utility.NotificationSpecs;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -42,7 +43,6 @@ public class NotificationServiceImplementation implements NotificationService {
     private final NotificationMapper mapper = new NotificationMapper();
 
 
-
     @Override
     public List<NotificationDto> publish(NotificationCreateRequest req) {
         // Load principals
@@ -61,19 +61,44 @@ public class NotificationServiceImplementation implements NotificationService {
                 ? EnumSet.copyOf(req.getChannels())
                 : EnumSet.of(req.getDeliveryMethod() != null ? req.getDeliveryMethod() : DeliveryMethod.IN_APP);
 
-        // Idempotency (optional, only if key provided): return existing IN_APP copy if already stored
-        if (req.getIdempotencyKey() != null && !req.getIdempotencyKey().isBlank()) {
-            Optional<Notification> existing = notificationRepository.findByIdempotencyKey(req.getIdempotencyKey());
-            if (existing.isPresent()) {
-                // Still send transport for non-IN_APP channels if you want "at-least-once" transport.
-                // Here we skip transport if idempotent hit is found.
-                return List.of(mapper.toDTO(existing.get()));
+        // ✅ We only persist ONE row per idempotencyKey (because uq_notification_idempotency is UNIQUE)
+        // Choose IN_APP as the persisted record (best UX: it shows up in the app)
+        DeliveryMethod persistedMethod = DeliveryMethod.IN_APP;
+
+        String key = (req.getIdempotencyKey() != null && !req.getIdempotencyKey().isBlank())
+                ? req.getIdempotencyKey().trim()
+                : null;
+
+        Notification saved;
+
+        // If key is provided, attempt insert; on duplicate, fetch existing
+        if (key != null) {
+            try {
+                Notification n = Notification.builder()
+                        .organization(org)
+                        .user(target)
+                        .type(req.getType())
+                        .title(req.getTitle())
+                        .message(req.getMessage())
+                        .relatedTable(req.getRelatedTable())
+                        .relatedId(req.getRelatedId())
+                        .priority(req.getPriority() != null ? req.getPriority() : NotificationPriority.NORMAL)
+                        .deliveryMethod(persistedMethod)          // ✅ only one stored row
+                        .dateExpires(req.getDateExpires())
+                        .createdBy(creator)
+                        .idempotencyKey(key)
+                        .build();
+
+                saved = notificationRepository.save(n);
+
+            } catch (DataIntegrityViolationException dup) {
+                // ✅ idempotency hit: return existing and DO NOT re-send transports
+                Notification existing = notificationRepository.findByIdempotencyKey(key)
+                        .orElseThrow(() -> dup);
+                return List.of(mapper.toDTO(existing));
             }
-        }
-
-        List<NotificationDto> out = new ArrayList<>(channels.size());
-
-        for (DeliveryMethod method : channels) {
+        } else {
+            // no idempotency key => normal behavior (still only one row)
             Notification n = Notification.builder()
                     .organization(org)
                     .user(target)
@@ -83,29 +108,96 @@ public class NotificationServiceImplementation implements NotificationService {
                     .relatedTable(req.getRelatedTable())
                     .relatedId(req.getRelatedId())
                     .priority(req.getPriority() != null ? req.getPriority() : NotificationPriority.NORMAL)
-                    .deliveryMethod(method)
+                    .deliveryMethod(persistedMethod)
                     .dateExpires(req.getDateExpires())
                     .createdBy(creator)
-                    .idempotencyKey(req.getIdempotencyKey())
                     .build();
 
-            Notification saved = notificationRepository.save(n);
-
-            // Dispatch side-effects
-            try {
-                sender.send(method, target, saved.getTitle(),
-                        Optional.ofNullable(saved.getMessage()).orElse(saved.getTitle()));
-            } catch (Exception ex) {
-                // transport failed => keep the persisted IN_APP record; optionally log/alert/retry
-                // You can add a retry table/queue here if needed.
-                // log.error("Notification transport failed", ex);
-            }
-
-            out.add(mapper.toDTO(saved));
+            saved = notificationRepository.save(n);
         }
 
-        return out;
+        // ✅ Dispatch side-effects for ALL requested channels (but do not persist per channel)
+        for (DeliveryMethod method : channels) {
+            try {
+                sender.send(
+                        method,
+                        target,
+                        saved.getTitle(),
+                        Optional.ofNullable(saved.getMessage()).orElse(saved.getTitle())
+                );
+            } catch (Exception ex) {
+                // transport failed => keep the persisted IN_APP record; optionally log/retry
+                // log.error("Notification transport failed", ex);
+            }
+        }
+
+        // Return the persisted notification (single record)
+        return List.of(mapper.toDTO(saved));
     }
+
+//    @Override
+//    public List<NotificationDto> publish(NotificationCreateRequest req) {
+//        // Load principals
+//        Organization org = orgRepo.findById(req.getOrgId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found"));
+//        SystemUser target = userRepo.findById(req.getUserId())
+//                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+//        SystemUser creator = null;
+//        if (req.getCreatedBy() != null) {
+//            creator = userRepo.findById(req.getCreatedBy())
+//                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Creator not found"));
+//        }
+//
+//        // Normalize channels: if absent, use single deliveryMethod or default IN_APP
+//        Set<DeliveryMethod> channels = (req.getChannels() != null && !req.getChannels().isEmpty())
+//                ? EnumSet.copyOf(req.getChannels())
+//                : EnumSet.of(req.getDeliveryMethod() != null ? req.getDeliveryMethod() : DeliveryMethod.IN_APP);
+//
+//        // Idempotency (optional, only if key provided): return existing IN_APP copy if already stored
+//        if (req.getIdempotencyKey() != null && !req.getIdempotencyKey().isBlank()) {
+//            Optional<Notification> existing = notificationRepository.findByIdempotencyKey(req.getIdempotencyKey());
+//            if (existing.isPresent()) {
+//                // Still send transport for non-IN_APP channels if you want "at-least-once" transport.
+//                // Here we skip transport if idempotent hit is found.
+//                return List.of(mapper.toDTO(existing.get()));
+//            }
+//        }
+//
+//        List<NotificationDto> out = new ArrayList<>(channels.size());
+//
+//        for (DeliveryMethod method : channels) {
+//            Notification n = Notification.builder()
+//                    .organization(org)
+//                    .user(target)
+//                    .type(req.getType())
+//                    .title(req.getTitle())
+//                    .message(req.getMessage())
+//                    .relatedTable(req.getRelatedTable())
+//                    .relatedId(req.getRelatedId())
+//                    .priority(req.getPriority() != null ? req.getPriority() : NotificationPriority.NORMAL)
+//                    .deliveryMethod(method)
+//                    .dateExpires(req.getDateExpires())
+//                    .createdBy(creator)
+//                    .idempotencyKey(req.getIdempotencyKey())
+//                    .build();
+//
+//            Notification saved = notificationRepository.save(n);
+//
+//            // Dispatch side-effects
+//            try {
+//                sender.send(method, target, saved.getTitle(),
+//                        Optional.ofNullable(saved.getMessage()).orElse(saved.getTitle()));
+//            } catch (Exception ex) {
+//                // transport failed => keep the persisted IN_APP record; optionally log/alert/retry
+//                // You can add a retry table/queue here if needed.
+//                // log.error("Notification transport failed", ex);
+//            }
+//
+//            out.add(mapper.toDTO(saved));
+//        }
+//
+//        return out;
+//    }
 
 
     @Override

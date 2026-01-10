@@ -68,16 +68,6 @@ public class VoteSubmission extends AuditBaseEntity {
             foreignKey = @ForeignKey(name = "fk_vote_submission_place"))
     private PollingPlace pollingPlace;
 
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "county_id", nullable = false,
-//            foreignKey = @ForeignKey(name = "fk_district_county"))
-//    private County county;
-//
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "district_id", nullable = false,
-//            foreignKey = @ForeignKey(name = "fk_center_district"))
-//    private District district;
-
     @Column(name = "contest_id", nullable = false)
     private UUID contestId;
 
@@ -114,6 +104,13 @@ public class VoteSubmission extends AuditBaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 30, nullable = false)
     private VoteStatus status = VoteStatus.PENDING;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "flagged_by")
+    private SystemUser flaggedBy;
+
+    @Column(name = "date_flagged")
+    private LocalDateTime dateFlagged;
 
     @Column(columnDefinition = "text")
     private String comments;

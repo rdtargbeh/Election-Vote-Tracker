@@ -32,6 +32,7 @@ public class ObserverReportServiceImplementation implements ObserverReportServic
     private final OrganizationRepository orgRepo;
     private final SystemUserRepository userRepo;
     private final CountyRepository countyRepo;
+    private final DistrictRepository districtRepository;
     private final PollingCenterRepository centerRepo;
     private final FileUploadService fileUploadService;
     private final NotificationService notificationService;
@@ -47,22 +48,40 @@ public class ObserverReportServiceImplementation implements ObserverReportServic
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Observer not found"));
 
         County county = null;
+        District district = null;
         PollingCenter center = null;
 
         if (req.getCenterId() != null) {
+
             center = centerRepo.findById(req.getCenterId())
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
-            county = center.getDistrict().getCounty();
+
+            district = center.getDistrict();
+            county = district.getCounty();
+
+        } else if (req.getDistrictId() != null) {
+
+            district = districtRepository.findById(req.getDistrictId())
+                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "District not found"));
+
+            county = district.getCounty();
+
         } else if (req.getCountyId() != null) {
+
             county = countyRepo.findById(req.getCountyId())
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "County not found"));
         }
 
         if ((req.getLatitude() == null) ^ (req.getLongitude() == null)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Both latitude and longitude are required for GPS");
+            throw new ResponseStatusException(
+                    BAD_REQUEST,
+                    "Both latitude and longitude are required for GPS"
+            );
         }
 
-        ObserverReport saved = repo.save(mapper.toEntity(req, org, observer, county, center));
+        ObserverReport saved = repo.save(
+                mapper.toEntity(req, org, observer, county,  center, district)
+        );
 
         // --- FILE UPLOADS (optional evidence) ---
         if (files != null && !files.isEmpty()) {
@@ -100,12 +119,20 @@ public class ObserverReportServiceImplementation implements ObserverReportServic
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Report not found"));
 
         County newCounty = null;
+        District district = null;
         PollingCenter newCenter = null;
 
         if (req.getCenterId() != null) {
             newCenter = centerRepo.findById(req.getCenterId())
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
-            newCounty = newCenter.getDistrict().getCounty();
+            district = newCenter.getDistrict();
+            newCounty = district.getCounty();
+
+        } else if (req.getDistrictId() != null) {
+            district = districtRepository.findById(req.getDistrictId())
+                    .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "District not found"));
+            newCounty = district.getCounty();
+
         } else if (req.getCountyId() != null) {
             newCounty = countyRepo.findById(req.getCountyId())
                     .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "County not found"));
@@ -115,7 +142,7 @@ public class ObserverReportServiceImplementation implements ObserverReportServic
             throw new ResponseStatusException(BAD_REQUEST, "Both latitude and longitude are required for GPS");
         }
 
-        mapper.apply(req, entity, newCounty, newCenter);
+        mapper.apply(req, entity, newCounty,  newCenter, district);
         ObserverReport saved = repo.save(entity);
 
         // --- APPEND NEW EVIDENCE (if provided) ---

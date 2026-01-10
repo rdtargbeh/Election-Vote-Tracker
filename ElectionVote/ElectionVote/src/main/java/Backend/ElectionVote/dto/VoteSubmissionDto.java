@@ -1,5 +1,6 @@
 package Backend.ElectionVote.dto;
 
+import Backend.ElectionVote.entity.SystemUser;
 import Backend.ElectionVote.enums.VoteStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Builder;
@@ -64,6 +65,11 @@ public class VoteSubmissionDto {
 
     private VoteStatus status;
     private String comments;
+
+    private UUID flaggedBy;
+    private String flaggedByName;
+    private LocalDateTime dateFlagged;
+
 
     private Double latitude;
     private Double longitude;

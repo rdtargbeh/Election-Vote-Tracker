@@ -53,8 +53,9 @@ type FilterMode = "CENTER" | "COUNTY" | "DISTRICT";
 export default function PollingCentersPage() {
   const qc = useQueryClient();
 
+  // Dashboard switch on who can edit
   const dashboardMode = useAuthStore((s) => s.dashboardMode);
-  const canEdit = dashboardMode === "NEC" || dashboardMode === "SYSTEM";
+  const canEdit = dashboardMode === "SYSTEM" || dashboardMode === "NEC";
 
   const size = 20;
   const [page, setPage] = useState(0);

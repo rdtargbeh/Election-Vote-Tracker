@@ -26,6 +26,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -112,27 +115,57 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         return createInternal(req, null, request);
     }
 
-    private VoteSubmissionDto createInternal(VoteSubmissionCreateRequest req, List<MultipartFile> files, HttpServletRequest request) {
+    private VoteSubmissionDto createInternal(VoteSubmissionCreateRequest req,
+                                             List<MultipartFile> files,
+                                             HttpServletRequest request) {
 
         if (req == null) throw new ResponseStatusException(BAD_REQUEST, "Request body is required");
+
+        // ✅ DRAFT intent (boolean command, state stored in enum)
+        final boolean isDraft = Boolean.TRUE.equals(req.getDraft());
+
+        // ---------------------------
+        // 1) Hard validations (prevent JPA "id must not be null")
+        // ---------------------------
+        if (req.getOrgId() == null) throw new ResponseStatusException(BAD_REQUEST, "orgId is required");
+        if (req.getElectionId() == null) throw new ResponseStatusException(BAD_REQUEST, "electionId is required");
+        if (req.getCenterId() == null) throw new ResponseStatusException(BAD_REQUEST, "centerId is required");
+        if (req.getPlaceId() == null) throw new ResponseStatusException(BAD_REQUEST, "placeId is required");
         if (req.getContestId() == null) throw new ResponseStatusException(BAD_REQUEST, "contestId is required");
 
+        // If you still allow UI to send agentId, keep it optional:
+        UUID agentId = (req.getAgentId() != null) ? req.getAgentId() : resolveCurrentUserId();
+        if (agentId == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "agentId is required");
+        }
+
+        // ✅ Draft can be partial: only enforce ballotsCast when NOT draft
+        boolean hasVotes = req.getCandidateVotes() != null && !req.getCandidateVotes().isEmpty();
+        if (!isDraft && hasVotes && req.getBallotsCast() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "ballotsCast is required when submitting candidateVotes");
+        }
+
+        // ---------------------------
+        // 2) Fetch references (now safe: IDs are non-null)
+        // ---------------------------
         Organization org = orgRepo.findById(req.getOrgId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Organization not found"));
 
         Election e = electionRepo.findById(req.getElectionId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Election not found"));
 
-
         PollingCenter c = centerRepo.findById(req.getCenterId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling center not found"));
 
-        SystemUser agent = userRepo.findById(req.getAgentId())
+        SystemUser agent = userRepo.findById(agentId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Agent not found"));
 
         PollingPlace p = placeRepo.findById(req.getPlaceId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Polling place not found"));
 
+        if (p.getPollingCenter() == null || p.getPollingCenter().getCenterId() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Polling place is missing polling center reference");
+        }
         if (!p.getPollingCenter().getCenterId().equals(c.getCenterId())) {
             throw new ResponseStatusException(BAD_REQUEST, "Polling place does not belong to the specified polling center");
         }
@@ -154,37 +187,57 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         }
 
         // ✅ One submission per (org, election, place, contest) unless soft-deleted
+        // NOTE: drafts also block duplicates (same as normal) to avoid multiple drafts per place/contest
         boolean alreadyExists = voteSubmissionRepository
                 .existsByOrganization_OrgIdAndElection_ElectionIdAndPollingPlace_PlaceIdAndContestIdAndDateDeletedIsNull(
                         org.getOrgId(), e.getElectionId(), p.getPlaceId(), req.getContestId()
                 );
         if (alreadyExists) {
-            throw new ResponseStatusException(CONFLICT,
-                    "Submission already exists for this polling place and contest. Update the existing submission instead.");
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "Submission already exists for this polling place and contest. Update the existing submission instead."
+            );
         }
 
         if (req.getCandidateVotes() != null && req.getCandidateVotes().size() > MAX_CANDIDATE_KEYS) {
             throw new ResponseStatusException(BAD_REQUEST, "Too many candidate entries");
         }
 
-        // ✅ contest-aware candidate validation
-        validateCandidateVotes(org.getOrgId(), e.getElectionId(), req.getContestId(), req.getCandidateVotes(), req.getBallotsCast());
+        // ✅ Strict validations ONLY when not draft
+        if (!isDraft) {
+            validateCandidateVotes(
+                    org.getOrgId(),
+                    e.getElectionId(),
+                    req.getContestId(),
+                    req.getCandidateVotes(),
+                    req.getBallotsCast()
+            );
 
-        validateTally(
-                req.getCandidateVotes(),
-                nz(req.getInvalidBallots()),
-                nz(req.getUnmarkedBallots()),
-                nz(req.getRejectedBallots()),
-                nz(req.getSpoiledBallots()),
-                nz(req.getUnusedBallots()),
-                nz(req.getBallotsCast()),
-                alloc.getRegisteredVoters(),
-                alloc.getBallotsIssued()
-        );
+            validateTally(
+                    req.getCandidateVotes(),
+                    nz(req.getInvalidBallots()),
+                    nz(req.getUnmarkedBallots()),
+                    nz(req.getRejectedBallots()),
+                    nz(req.getSpoiledBallots()),
+                    nz(req.getUnusedBallots()),
+                    nz(req.getBallotsCast()),
+                    alloc.getRegisteredVoters(),
+                    alloc.getBallotsIssued()
+            );
+        }
 
-
+        // ---------------------------
+        // 3) Build entity
+        // ---------------------------
         VoteSubmission s = mapper.toEntity(req, org, e, c, agent);
         s.setPollingPlace(p);
+
+        // ✅ Ensure DB-required fields always set (draft-safe)
+        if (s.getCandidateVotes() == null) s.setCandidateVotes(new HashMap<>());
+        if (s.getBallotsCast() == null) s.setBallotsCast(0);
+
+        // ✅ Status set by intent
+        s.setStatus(isDraft ? VoteStatus.DRAFT : VoteStatus.PENDING);
 
         // Request-derived fields
         if (request != null) {
@@ -200,31 +253,39 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         // Idempotency key check (global uniqueness)
         if (req.getIdempotencyKey() != null && !req.getIdempotencyKey().isBlank()) {
             voteSubmissionRepository.findByIdempotencyKey(req.getIdempotencyKey()).ifPresent(existing -> {
-                throw new ResponseStatusException(CONFLICT, "Submission with this idempotency key already exists: " + existing.getSubmissionId());
+                throw new ResponseStatusException(CONFLICT,
+                        "Submission with this idempotency key already exists: " + existing.getSubmissionId());
             });
             s.setIdempotencyKey(req.getIdempotencyKey());
         }
 
-        // ✅ include contestId in hash
-        s.setSubmissionHash(buildSubmissionHash(
-                org.getOrgId(),
-                e.getElectionId(),
-                req.getContestId(),
-                c.getCenterId(),
-                p.getPlaceId(),
-                agent.getUserId(),
-                s.getCandidateVotes(),
-                s.getBallotsCast(),
-                s.getInvalidBallots(),
-                s.getUnmarkedBallots(),
-                s.getRejectedBallots(),
-                s.getSpoiledBallots(),
-                s.getUnusedBallots()
-        ));
+        // ✅ Hash/duplicate check ONLY for real submissions (not drafts)
+        if (!isDraft) {
+            s.setSubmissionHash(buildSubmissionHash(
+                    org.getOrgId(),
+                    e.getElectionId(),
+                    req.getContestId(),
+                    c.getCenterId(),
+                    p.getPlaceId(),
+                    agent.getUserId(),
+                    s.getCandidateVotes(),
+                    s.getBallotsCast(),
+                    s.getInvalidBallots(),
+                    s.getUnmarkedBallots(),
+                    s.getRejectedBallots(),
+                    s.getSpoiledBallots(),
+                    s.getUnusedBallots()
+            ));
 
-
-        if (voteSubmissionRepository.existsBySubmissionHash(s.getSubmissionHash())) {
-            throw new ResponseStatusException(CONFLICT, "Duplicate submission (same content).");
+            if (voteSubmissionRepository.existsBySubmissionHash(s.getSubmissionHash())) {
+                throw new ResponseStatusException(CONFLICT, "Duplicate submission (same content).");
+            }
+        } else {
+            // Draft should not be hashed/signed until submitted
+            s.setSubmissionHash(null);
+            s.setSubmissionSignature(null);
+            s.setSubmissionSignerKeyId(null);
+            s.setChainHash(null);
         }
 
         VoteSubmission saved = voteSubmissionRepository.save(s);
@@ -233,7 +294,35 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             attachFilesToSubmission(org, saved, agent, files);
         }
 
-        // Ledger (atomic) + sign
+        // ✅ Draft path ends here (no ledger/signing/received notification)
+        if (isDraft) {
+            auditLogService.logSubmissionCreate(
+                    org.getOrgId(),
+                    agent.getUserId(),
+                    "VoteSubmission",
+                    "Created DRAFT submission: " + saved.getSubmissionId() +
+                            " contest=" + req.getContestId() +
+                            " at " + c.getCenterName() +
+                            " / place: " + p.getCode()
+            );
+
+            notify(
+                    org.getOrgId(), agent.getUserId(),
+                    NotificationType.VOTE,
+                    "Draft Saved",
+                    "Your draft for " + c.getCenterName() + " / place " + p.getCode() + " was saved.",
+                    "vote_submission", saved.getSubmissionId(),
+                    NotificationPriority.LOW, DeliveryMethod.IN_APP
+            );
+
+            VoteSubmissionDto dto = mapper.toDTO(saved);
+            enrichWithAllocation(dto, alloc);
+            return dto;
+        }
+
+        // ---------------------------
+        // 4) Non-draft: Ledger (atomic) + sign (existing behavior)
+        // ---------------------------
         String payloadHash = buildSubmissionPayloadHash(saved);
         Map<String, Object> ledgerRes = jdbc.queryForMap(
                 "SELECT * FROM fn_log_ledger_and_update_submission(?, ?, ?, ?)",
@@ -278,7 +367,6 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         VoteSubmissionDto dto = mapper.toDTO(saved);
         enrichWithAllocation(dto, alloc);
         return dto;
-//        return mapper.toDTO(saved);
     }
 
 
@@ -296,68 +384,110 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                 VoteSubmission s = voteSubmissionRepository.findById(id)
                         .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
 
-                if (s.getStatus() != VoteStatus.PENDING) {
-                    throw new ResponseStatusException(BAD_REQUEST, "Only PENDING submissions can be updated");
+                // ✅ Allow updates for PENDING + DRAFT only
+                if (s.getStatus() != VoteStatus.PENDING && s.getStatus() != VoteStatus.DRAFT) {
+                    throw new ResponseStatusException(BAD_REQUEST, "Only PENDING or DRAFT submissions can be updated");
                 }
 
+                final boolean isDraft = (s.getStatus() == VoteStatus.DRAFT);
+
                 PollingPlace place = s.getPollingPlace();
-                if (place == null) throw new ResponseStatusException(BAD_REQUEST, "Submission is missing polling place reference");
+                if (place == null) {
+                    throw new ResponseStatusException(BAD_REQUEST, "Submission is missing polling place reference");
+                }
 
                 var alloc = placeAllocationRepo
                         .findByElection_ElectionIdAndPollingPlace_PlaceId(
                                 s.getElection().getElectionId(),
                                 place.getPlaceId()
                         )
-                        .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Polling place not allocated for this election"));
+                        .orElseThrow(() -> new ResponseStatusException(
+                                BAD_REQUEST,
+                                "Polling place not allocated for this election"
+                        ));
 
-                Map<String, Integer> mergedVotes =
-                        (req.getCandidateVotes() != null)
-                                ? req.getCandidateVotes()
-                                : (s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap());
+                Map<String, Integer> mergedVotes = mergeCandidateVotes(s.getCandidateVotes(), req.getCandidateVotes());
 
-                int cast    = (req.getBallotsCast()     != null) ? req.getBallotsCast()     : s.getBallotsCast();
-                int invalid = (req.getInvalidBallots()  != null) ? req.getInvalidBallots()  : s.getInvalidBallots();
-                int blank   = (req.getUnmarkedBallots()    != null) ? req.getUnmarkedBallots()    : s.getUnmarkedBallots();
-                int rej     = (req.getRejectedBallots() != null) ? req.getRejectedBallots() : s.getRejectedBallots();
-                int spo     = (req.getSpoiledBallots()  != null) ? req.getSpoiledBallots()  : s.getSpoiledBallots();
-
-                if (mergedVotes != null && mergedVotes.size() > MAX_CANDIDATE_KEYS) {
+                if (mergedVotes.size() > MAX_CANDIDATE_KEYS) {
                     throw new ResponseStatusException(BAD_REQUEST, "Too many candidate entries");
                 }
 
+                boolean candidateVotesProvided = req.getCandidateVotes() != null;
+                Integer castFromReq = req.getBallotsCast();
 
-                // ✅ contest-aware validation (submission already has contestId)
-                validateCandidateVotes(
-                        s.getOrganization().getOrgId(),
-                        s.getElection().getElectionId(),
-                        s.getContestId(),
-                        mergedVotes,
-                        cast
-                );
+                // ✅ Only enforce ballotsCast when NOT draft
+                if (!isDraft && candidateVotesProvided && castFromReq == null) {
+                    throw new ResponseStatusException(
+                            BAD_REQUEST,
+                            "ballotsCast is required when updating candidateVotes"
+                    );
+                }
 
-                int unused  = (req.getUnusedBallots()  != null) ? req.getUnusedBallots()  : nz(s.getUnusedBallots());
+                // For draft: allow cast to remain 0 / existing
+                int cast = (castFromReq != null) ? castFromReq : nzInt(s.getBallotsCast());
+                int invalid = (req.getInvalidBallots() != null) ? req.getInvalidBallots() : nzInt(s.getInvalidBallots());
+                int blank = (req.getUnmarkedBallots() != null) ? req.getUnmarkedBallots() : nzInt(s.getUnmarkedBallots());
+                int rej = (req.getRejectedBallots() != null) ? req.getRejectedBallots() : nzInt(s.getRejectedBallots());
+                int spo = (req.getSpoiledBallots() != null) ? req.getSpoiledBallots() : nzInt(s.getSpoiledBallots());
+                int unused = (req.getUnusedBallots() != null) ? req.getUnusedBallots() : nzInt(s.getUnusedBallots());
 
-                validateTally(mergedVotes, invalid, blank, rej, spo, unused, cast,
-                        alloc.getRegisteredVoters(), alloc.getBallotsIssued());
+                // ✅ Strict validations only for PENDING (not DRAFT)
+                if (!isDraft) {
+                    validateCandidateVotes(
+                            s.getOrganization().getOrgId(),
+                            s.getElection().getElectionId(),
+                            s.getContestId(),
+                            mergedVotes,
+                            cast
+                    );
 
+                    validateTally(
+                            mergedVotes, invalid, blank, rej, spo, unused, cast,
+                            alloc.getRegisteredVoters(), alloc.getBallotsIssued()
+                    );
+                }
+
+                // ---------------------------
+                // Apply request after passing validations (or immediately for draft)
+                // ---------------------------
                 mapper.apply(req, s);
 
-                // ✅ include contestId in hash
-                s.setSubmissionHash(buildSubmissionHash(
-                        s.getOrganization().getOrgId(),
-                        s.getElection().getElectionId(),
-                        s.getContestId(),
-                        s.getPollingCenter().getCenterId(),
-                        s.getPollingPlace().getPlaceId(),
-                        s.getAgent().getUserId(),
-                        s.getCandidateVotes(),
-                        s.getBallotsCast(),
-                        s.getInvalidBallots(),
-                        s.getUnmarkedBallots(),
-                        s.getRejectedBallots(),
-                        s.getSpoiledBallots(),
-                        s.getUnusedBallots()
-                ));
+                // Ensure merged map is what gets saved (mapper may replace/ignore)
+                s.setCandidateVotes(mergedVotes);
+
+                // Optional: enforce ballotsCast if mapper doesn't set it correctly
+                if (castFromReq != null) {
+                    s.setBallotsCast(castFromReq);
+                }
+
+                // ✅ Ensure DB-required fields always set (draft-safe)
+                if (s.getCandidateVotes() == null) s.setCandidateVotes(new HashMap<>());
+                if (s.getBallotsCast() == null) s.setBallotsCast(0);
+
+                // ✅ Draft updates do NOT produce hashes/signatures
+                if (isDraft) {
+                    s.setSubmissionHash(null);
+                    s.setSubmissionSignature(null);
+                    s.setSubmissionSignerKeyId(null);
+                    s.setChainHash(null);
+                } else {
+                    // ✅ include contestId in hash (existing behavior)
+                    s.setSubmissionHash(buildSubmissionHash(
+                            s.getOrganization().getOrgId(),
+                            s.getElection().getElectionId(),
+                            s.getContestId(),
+                            s.getPollingCenter().getCenterId(),
+                            s.getPollingPlace().getPlaceId(),
+                            s.getAgent().getUserId(),
+                            s.getCandidateVotes(),
+                            s.getBallotsCast(),
+                            s.getInvalidBallots(),
+                            s.getUnmarkedBallots(),
+                            s.getRejectedBallots(),
+                            s.getSpoiledBallots(),
+                            s.getUnusedBallots()
+                    ));
+                }
 
                 VoteSubmission saved = voteSubmissionRepository.save(s);
 
@@ -365,7 +495,32 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                     attachFilesToSubmission(saved.getOrganization(), saved, saved.getAgent(), files);
                 }
 
-                // Ledger update + sign
+                // ✅ Draft: stop here (no ledger/signing/standard notify)
+                if (isDraft) {
+                    auditLogService.logSubmissionUpdate(
+                            saved.getOrganization().getOrgId(),
+                            saved.getAgent().getUserId(),
+                            "VoteSubmission",
+                            "Updated DRAFT submission: " + saved.getSubmissionId()
+                    );
+
+                    notify(
+                            saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+                            NotificationType.VOTE,
+                            "Draft Updated",
+                            "Your draft submission for " + saved.getPollingCenter().getCenterName() + " was updated.",
+                            "vote_submission", saved.getSubmissionId(),
+                            NotificationPriority.LOW, DeliveryMethod.IN_APP
+                    );
+
+                    VoteSubmissionDto dto = mapper.toDTO(saved);
+                    enrichWithAllocation(dto, alloc);
+                    return dto;
+                }
+
+                // ---------------------------
+                // Non-draft: Ledger update + sign (existing behavior)
+                // ---------------------------
                 String payloadHash = buildSubmissionPayloadHash(saved);
                 Map<String, Object> ledgerRes = jdbc.queryForMap(
                         "SELECT * FROM fn_log_ledger_and_update_submission(?, ?, ?, ?)",
@@ -381,8 +536,10 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                 SigningService.SignResult signResult = signingService.signHex(chainHash);
 
                 jdbc.update("UPDATE audit_ledger SET signature = ? WHERE ledger_id = ?", signResult.signature(), ledgerId);
-                jdbc.update("UPDATE vote_submission SET submission_signature = ?, submission_signer_key_id = ? WHERE submission_id = ?",
-                        signResult.signature(), signResult.keyId(), saved.getSubmissionId());
+                jdbc.update(
+                        "UPDATE vote_submission SET submission_signature = ?, submission_signer_key_id = ? WHERE submission_id = ?",
+                        signResult.signature(), signResult.keyId(), saved.getSubmissionId()
+                );
 
                 auditLogService.logSubmissionUpdate(
                         saved.getOrganization().getOrgId(),
@@ -404,14 +561,12 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
                 enrichWithAllocation(dto, alloc);
                 return dto;
 
-//                return mapper.toDTO(saved);
-
             } catch (ObjectOptimisticLockingFailureException e) {
                 attempts++;
                 if (attempts > OPTIMISTIC_LOCK_RETRIES) {
                     throw new ResponseStatusException(CONFLICT, "Concurrent update conflict, please retry");
                 }
-                try { Thread.sleep(50L + (long)(Math.random()*50)); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(50L + (long) (Math.random() * 50)); } catch (InterruptedException ignored) {}
             }
         }
     }
@@ -427,9 +582,13 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         VoteSubmission s = voteSubmissionRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
 
-        if (s.getStatus() != VoteStatus.PENDING) {
+        if (s.getStatus() != VoteStatus.PENDING && s.getStatus() != VoteStatus.FLAGGED) {
             throw new ResponseStatusException(BAD_REQUEST, "Submission already processed");
         }
+
+//        if (s.getStatus() != VoteStatus.PENDING) {
+//            throw new ResponseStatusException(BAD_REQUEST, "Submission already processed");
+//        }
 
         // ✅ contest-aware validation before verifying
         validateCandidateVotes(
@@ -531,6 +690,171 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
         return mapper.toDTO(saved);
     }
 
+
+    @Override
+    @Transactional
+    public VoteSubmissionDto submitDraft(UUID id, HttpServletRequest request) {
+
+        VoteSubmission s = voteSubmissionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
+
+        if (s.getStatus() != VoteStatus.DRAFT) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only DRAFT submissions can be submitted");
+        }
+
+        PollingPlace place = s.getPollingPlace();
+        var alloc = placeAllocationRepo
+                .findByElection_ElectionIdAndPollingPlace_PlaceId(
+                        s.getElection().getElectionId(),
+                        place.getPlaceId()
+                )
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Polling place not allocated for this election"));
+
+        // Require minimum “final submission” requirements
+        if (s.getBallotsCast() == null || s.getBallotsCast() <= 0) {
+            throw new ResponseStatusException(BAD_REQUEST, "ballotsCast is required to submit draft");
+        }
+        if (s.getCandidateVotes() == null) s.setCandidateVotes(new HashMap<>());
+
+        // Full validations
+        validateCandidateVotes(
+                s.getOrganization().getOrgId(),
+                s.getElection().getElectionId(),
+                s.getContestId(),
+                s.getCandidateVotes(),
+                s.getBallotsCast()
+        );
+
+        validateTally(
+                s.getCandidateVotes(),
+                nz(s.getInvalidBallots()),
+                nz(s.getUnmarkedBallots()),
+                nz(s.getRejectedBallots()),
+                nz(s.getSpoiledBallots()),
+                nz(s.getUnusedBallots()),
+                nz(s.getBallotsCast()),
+                alloc.getRegisteredVoters(),
+                alloc.getBallotsIssued()
+        );
+
+        // Set official fields
+        s.setStatus(VoteStatus.PENDING);
+        s.setSubmissionTime(LocalDateTime.now());
+
+        if (request != null) {
+            s.setClientIp(RequestUtils.getClientIp(request));
+            s.setUserAgent(RequestUtils.getUserAgent(request));
+        }
+
+        // Hash + duplicate check
+        s.setSubmissionHash(buildSubmissionPayloadHash(s));
+        if (voteSubmissionRepository.existsBySubmissionHash(s.getSubmissionHash())) {
+            throw new ResponseStatusException(CONFLICT, "Duplicate submission (same content).");
+        }
+
+        VoteSubmission saved = voteSubmissionRepository.save(s);
+
+        // Ledger + sign (same as your create/update)
+        String payloadHash = buildSubmissionPayloadHash(saved);
+        Map<String, Object> ledgerRes = jdbc.queryForMap(
+                "SELECT * FROM fn_log_ledger_and_update_submission(?, ?, ?, ?)",
+                "VOTE_SUBMISSION_SUBMIT_DRAFT",
+                saved.getSubmissionId(),
+                payloadHash,
+                saved.getAgent().getUserId()
+        );
+
+        UUID ledgerId = toUuid(ledgerRes.get("ledger_id"));
+        String chainHash = ledgerRes.get("chain_hash") != null ? ledgerRes.get("chain_hash").toString() : null;
+
+        SigningService.SignResult signResult = signingService.signHex(chainHash);
+
+        jdbc.update("UPDATE audit_ledger SET signature = ? WHERE ledger_id = ?", signResult.signature(), ledgerId);
+        jdbc.update("UPDATE vote_submission SET submission_signature = ?, submission_signer_key_id = ? WHERE submission_id = ?",
+                signResult.signature(), signResult.keyId(), saved.getSubmissionId());
+
+        notify(
+                saved.getOrganization().getOrgId(), saved.getAgent().getUserId(),
+                NotificationType.VOTE,
+                "Draft Submitted",
+                "Your draft submission for " + saved.getPollingCenter().getCenterName() + " was submitted for review.",
+                "vote_submission", saved.getSubmissionId(),
+                NotificationPriority.NORMAL, DeliveryMethod.IN_APP
+        );
+
+        VoteSubmissionDto dto = mapper.toDTO(saved);
+        enrichWithAllocation(dto, alloc);
+        return dto;
+    }
+
+    @Override
+    @Transactional
+    public VoteSubmissionDto flag(UUID id, VoteSubmissionFlagRequest req) {
+
+        VoteSubmission s = voteSubmissionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Submission not found"));
+
+        if (req == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Request body is required");
+        }
+        if (req.getActorUserId() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "actorUserId is required");
+        }
+        if (req.getFlagged() == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "flagged is required");
+        }
+
+        SystemUser actor = userRepo.findById(req.getActorUserId())
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Actor not found"));
+
+        boolean flagged = Boolean.TRUE.equals(req.getFlagged());
+        String comment = req.getComments() == null ? null : req.getComments().trim();
+
+        if (flagged) {
+            VoteStatus st = s.getStatus();
+            if (st != VoteStatus.PENDING && st != VoteStatus.DRAFT) {
+                throw new ResponseStatusException(BAD_REQUEST, "Only DRAFT or PENDING submissions can be flagged");
+            }
+            if (comment == null || comment.isBlank()) {
+                throw new ResponseStatusException(BAD_REQUEST, "Comments is required when flagging a submission");
+            }
+
+            s.setStatus(VoteStatus.FLAGGED);
+            s.setFlaggedBy(actor);
+            s.setDateFlagged(LocalDateTime.now());
+            s.setComments("[flagged] " + comment);
+
+            auditLogService.log(
+                    s.getOrganization().getOrgId(),
+                    actor.getUserId(),
+                    ActivityType.VOTE_FLAGGED,
+                    "vote_submission",
+                    "Flagged submission: " + s.getSubmissionId() + " comments=" + comment
+            );
+        } else {
+            if (s.getStatus() != VoteStatus.FLAGGED) {
+                throw new ResponseStatusException(BAD_REQUEST, "Only FLAGGED submissions can be unflagged");
+            }
+
+            s.setStatus(VoteStatus.PENDING);
+            s.setFlaggedBy(null);
+            s.setDateFlagged(null);
+
+            if (comment != null && !comment.isBlank()) s.setComments("[unflagged] " + comment);
+
+            auditLogService.log(
+                    s.getOrganization().getOrgId(),
+                    actor.getUserId(),
+                    ActivityType.VOTE_UNFLAGGED,
+                    "vote_submission",
+                    "Unflagged submission: " + s.getSubmissionId() + (comment != null ? " comments=" + comment : "")
+            );
+        }
+
+        return mapper.toDTO(voteSubmissionRepository.save(s));
+    }
+
+
     // ------------------------------------------------------------------------
     // Delete / Get / Search (search updated to allow contestId)
     // ------------------------------------------------------------------------
@@ -599,12 +923,20 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             UUID contestId,          // ✅ contest dropdown filter
             Pageable pageable
     ) {
+        // ✅ used for agent-only draft visibility
+        UUID currentUserId = resolveCurrentUserId();
+
         Specification<VoteSubmission> spec = Specification
                 .where(VoteSubmissionSpecs.orgEquals(orgId))
                 .and(VoteSubmissionSpecs.electionEquals(electionId))
                 .and(VoteSubmissionSpecs.centerEquals(centerId))
                 .and(VoteSubmissionSpecs.agentEquals(agentId))
-                .and(VoteSubmissionSpecs.statusEquals(status))
+
+                // ✅ DRAFT rules:
+                // - status=null => exclude drafts unless owned by current user
+                // - status=DRAFT => only owned drafts
+                .and(VoteSubmissionSpecs.statusEquals(status, currentUserId))
+
                 .and(VoteSubmissionSpecs.between(from, to))
                 .and(VoteSubmissionSpecs.textSearch(q))
                 .and(VoteSubmissionSpecs.contestCategoryEquals(category))
@@ -615,7 +947,11 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
                 // ✅ FIX: filter by submission location (center->district->county)
                 .and(VoteSubmissionSpecs.countyEquals(countyId))
-                .and(VoteSubmissionSpecs.districtEquals(districtId));
+                .and(VoteSubmissionSpecs.districtEquals(districtId))
+
+                // ✅ UX: FLAGGED first, then PENDING, VERIFIED, REJECTED, DRAFT
+                // (does nothing for count query)
+                .and(VoteSubmissionSpecs.orderByStatusPriorityThenDateDesc());
 
         Page<VoteSubmission> page = voteSubmissionRepository.findAll(spec, pageable);
 
@@ -656,6 +992,7 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
             return dto;
         });
     }
+
 
 
     @Override
@@ -958,7 +1295,68 @@ public class VoteSubmissionServiceImplementation implements VoteSubmissionServic
 
 
 
+    private int nzInt(Integer v) {
+        return v == null ? 0 : v;
+    }
 
+    /**
+     * Merge votes safely:
+     * - If updates == null => keep existing map
+     * - If updates contains a key => overwrite that key
+     * - Supports “update only one candidate” without losing other candidates
+     */
+    private Map<String, Integer> mergeCandidateVotes(Map<String, Integer> existing,
+                                                     Map<String, Integer> updates) {
+
+        Map<String, Integer> out = new HashMap<>();
+        if (existing != null) out.putAll(existing);
+
+        if (updates == null) return out;
+
+        for (Map.Entry<String, Integer> e : updates.entrySet()) {
+            String k = e.getKey();
+            Integer v = e.getValue();
+
+            if (k == null || k.isBlank()) {
+                throw new ResponseStatusException(BAD_REQUEST, "candidateVotes contains null/blank candidate id");
+            }
+            if (v == null || v < 0) {
+                throw new ResponseStatusException(BAD_REQUEST, "candidateVotes for candidate " + k + " must be >= 0");
+            }
+
+            out.put(k, v);
+        }
+
+        return out;
+    }
+
+
+    private UUID resolveCurrentUserId() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null) return null;
+
+            Object principal = auth.getPrincipal();
+
+            // If your principal is Jwt
+            if (principal instanceof Jwt jwt) {
+                // Use whichever claim you store userId in.
+                // Common: "sub" or "userId"
+                String v = jwt.getClaimAsString("userId");
+                if (v == null || v.isBlank()) v = jwt.getSubject();
+                return (v == null || v.isBlank()) ? null : UUID.fromString(v);
+            }
+
+            // If you store UUID directly
+            if (principal instanceof String s) {
+                return UUID.fromString(s);
+            }
+
+            return null;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
 
 
     /**

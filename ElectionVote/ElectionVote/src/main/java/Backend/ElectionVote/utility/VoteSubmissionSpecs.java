@@ -46,11 +46,44 @@ public final class VoteSubmissionSpecs {
                 : cb.equal(r.get("agent").get("userId"), agentId);
     }
 
-    public static Specification<VoteSubmission> statusEquals(VoteStatus status){
-        return (r, q, cb) -> status == null
-                ? cb.conjunction()
-                : cb.equal(r.get("status"), status);
+    public static Specification<VoteSubmission> statusEquals(VoteStatus status, UUID currentUserId) {
+        return (root, query, cb) -> {
+
+            // If user explicitly asked for status, obey it.
+            if (status != null) {
+                // If they asked for DRAFT, enforce ownership
+                if (status == VoteStatus.DRAFT) {
+                    if (currentUserId == null) return cb.disjunction(); // no user => see nothing
+                    return cb.and(
+                            cb.equal(root.get("status"), VoteStatus.DRAFT),
+                            cb.equal(root.get("agent").get("userId"), currentUserId)
+                    );
+                }
+                return cb.equal(root.get("status"), status);
+            }
+
+            // Default (status == null):
+            // include all non-draft, and include drafts ONLY for the current agent
+            if (currentUserId == null) {
+                return cb.notEqual(root.get("status"), VoteStatus.DRAFT);
+            }
+
+            return cb.or(
+                    cb.notEqual(root.get("status"), VoteStatus.DRAFT),
+                    cb.and(
+                            cb.equal(root.get("status"), VoteStatus.DRAFT),
+                            cb.equal(root.get("agent").get("userId"), currentUserId)
+                    )
+            );
+        };
     }
+
+
+//    public static Specification<VoteSubmission> statusEquals(VoteStatus status){
+//        return (r, q, cb) -> status == null
+//                ? cb.conjunction()
+//                : cb.equal(r.get("status"), status);
+//    }
 
     public static Specification<VoteSubmission> between(LocalDateTime from, LocalDateTime to){
         return (r, q, cb) -> {
@@ -69,6 +102,37 @@ public final class VoteSubmissionSpecs {
             return cb.like(cb.lower(r.get("comments")), like);
         };
     }
+
+    public static Specification<VoteSubmission> orderByStatusPriorityThenDateDesc() {
+        return (root, query, cb) -> {
+
+            // Avoid messing with count queries
+            if (Long.class.equals(query.getResultType()) || long.class.equals(query.getResultType())) {
+                return cb.conjunction();
+            }
+
+            var statusPath = root.get("status");
+
+            // CASE status WHEN ... THEN ...
+            var statusRank = cb.selectCase(statusPath)
+                    .when(VoteStatus.FLAGGED, 0)
+                    .when(VoteStatus.PENDING, 1)
+                    .when(VoteStatus.VERIFIED, 2)
+                    .when(VoteStatus.REJECTED, 3)
+                    .when(VoteStatus.DRAFT, 4)
+                    .otherwise(9);
+
+            // Primary: status priority, Secondary: latest first
+            query.orderBy(
+                    cb.asc(statusRank),
+                    cb.desc(root.get("submissionTime")),
+                    cb.desc(root.get("dateCreated"))
+            );
+
+            return cb.conjunction();
+        };
+    }
+
 
     // ------------------------------------------------------------------
     // ✅ Contest linkage filters (requires vote_submission.contestId + relation "contest")

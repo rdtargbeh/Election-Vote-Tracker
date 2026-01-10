@@ -36,7 +36,7 @@ public class PollingCenterAllocationController {
     public PollingCenterAllocationDto create(
             @Valid @RequestBody PollingCenterAllocationCreateRequest req
     ) {
-        authz.requirePlatformAdmin();  // required system admin
+        authz.requireNecAdminOrPlatformAdmin();  // required system admin
         return allocationService.create(req);
     }
 
@@ -48,7 +48,7 @@ public class PollingCenterAllocationController {
             @PathVariable("id") UUID id,
             @Valid @RequestBody PollingCenterAllocationUpdateRequest req
     ) {
-        authz.requirePlatformAdmin();  // required system admin
+        authz.requireNecAdminOrPlatformAdmin();  // required system admin
         return allocationService.update(id, req);
     }
 
@@ -58,6 +58,7 @@ public class PollingCenterAllocationController {
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable("id") UUID id) {
+        authz.requireNecAdminOrPlatformAdmin();
         allocationService.delete(id);
     }
 

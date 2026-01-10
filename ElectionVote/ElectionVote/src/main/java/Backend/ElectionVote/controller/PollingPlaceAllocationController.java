@@ -33,7 +33,7 @@ public class PollingPlaceAllocationController {
     @PostMapping
     public PollingPlaceAllocationDto create(
             @Valid @RequestBody PollingPlaceAllocationCreateRequest req) {
-        authz.requirePlatformAdmin();
+        authz.requireNecAdminOrPlatformAdmin();
         return allocationService.create(req);
     }
 
@@ -56,6 +56,7 @@ public class PollingPlaceAllocationController {
     public PollingPlaceAllocationDto update(
             @PathVariable("id") UUID id,
             @Valid @RequestBody PollingPlaceAllocationUpdateRequest req) {
+        authz.requireNecAdminOrPlatformAdmin();
         return allocationService.update(id, req);
     }
 
@@ -66,6 +67,7 @@ public class PollingPlaceAllocationController {
      */
     @DeleteMapping("/{id}")
     public void delete(@PathVariable("id") UUID id) {
+        authz.requireNecAdminOrPlatformAdmin();
         allocationService.delete(id);
     }
 

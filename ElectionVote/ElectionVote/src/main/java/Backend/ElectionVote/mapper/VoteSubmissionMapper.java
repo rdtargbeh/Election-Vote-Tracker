@@ -22,6 +22,7 @@ public class VoteSubmissionMapper {
     private static final GeometryFactory GF = new GeometryFactory(new PrecisionModel(), 4326);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+
     public VoteSubmissionDto toDTO(VoteSubmission s) {
         Organization org = s.getOrganization();
         Election e = s.getElection();
@@ -29,6 +30,7 @@ public class VoteSubmissionMapper {
         PollingCenter c = s.getPollingCenter();
         SystemUser a = s.getAgent();
         SystemUser v = s.getVerifiedBy();
+        SystemUser f = s.getFlaggedBy(); // ✅ NEW
         Contest contest = s.getContest();
 
         Double lat = null, lon = null;
@@ -39,6 +41,9 @@ public class VoteSubmissionMapper {
 
         String agentName = a != null ? a.getFirstName() + " " + a.getLastName() : null;
         String verifiedByName = v != null ? v.getFirstName() + " " + v.getLastName() : null;
+
+        // ✅ NEW (safe, does not touch lazy role)
+        String flaggedByName = f != null ? (f.getFirstName() + " " + f.getLastName()).trim() : null;
 
         Map<String, Integer> votesMap =
                 s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap();
@@ -102,6 +107,11 @@ public class VoteSubmissionMapper {
                 .status(s.getStatus())
                 .comments(s.getComments())
 
+                // ✅ FIX: never return entity; return primitives only
+                .flaggedBy(f != null ? f.getUserId() : null)
+                .flaggedByName(flaggedByName)
+                .dateFlagged(s.getDateFlagged())
+
                 .latitude(lat)
                 .longitude(lon)
 
@@ -120,6 +130,108 @@ public class VoteSubmissionMapper {
                 .chainHash(s.getChainHash())
                 .build();
     }
+
+
+//    public VoteSubmissionDto toDTO(VoteSubmission s) {
+//        Organization org = s.getOrganization();
+//        Election e = s.getElection();
+//        PollingPlace p = s.getPollingPlace();
+//        PollingCenter c = s.getPollingCenter();
+//        SystemUser a = s.getAgent();
+//        SystemUser v = s.getVerifiedBy();
+//        Contest contest = s.getContest();
+//
+//        Double lat = null, lon = null;
+//        if (s.getGpsLocation() != null) {
+//            lon = s.getGpsLocation().getX();
+//            lat = s.getGpsLocation().getY();
+//        }
+//
+//        String agentName = a != null ? a.getFirstName() + " " + a.getLastName() : null;
+//        String verifiedByName = v != null ? v.getFirstName() + " " + v.getLastName() : null;
+//
+//        Map<String, Integer> votesMap =
+//                s.getCandidateVotes() != null ? s.getCandidateVotes() : Collections.emptyMap();
+//
+//        int validVotes = votesMap.values().stream().mapToInt(Integer::intValue).sum();
+//
+//        int invalidTotal =
+//                nz(s.getInvalidBallots()) +
+//                        nz(s.getUnmarkedBallots()) +
+//                        nz(s.getRejectedBallots()) +
+//                        nz(s.getSpoiledBallots());
+//
+//        String candidateVotesJson;
+//        try {
+//            candidateVotesJson = objectMapper.writeValueAsString(votesMap);
+//        } catch (Exception ex) {
+//            candidateVotesJson = "{}";
+//        }
+//
+//        return VoteSubmissionDto.builder()
+//                .submissionId(s.getSubmissionId())
+//
+//                .orgId(org.getOrgId())
+//                .orgName(org.getOrgName())
+//
+//                .electionId(e.getElectionId())
+//                .electionName(e.getElectionName())
+//                .year(e.getYear())
+//                .contestId(s.getContestId())
+//                .contestName(contest != null ? contest.getContestName() : null)
+//                .contestCategory(contest != null && contest.getCategory() != null ? contest.getCategory().name() : null)
+//                .contestScopeType(contest != null && contest.getScopeType() != null ? contest.getScopeType().name() : null)
+//
+//                .centerId(c.getCenterId())
+//                .centerCode(c.getCode())
+//                .centerName(c.getCenterName())
+//
+//                .placeId(p.getPlaceId())
+//                .placeCode(p.getCode())
+//                .placeNumber(p.getPlaceNumber())
+//                .placeLabel(p.getLabel())
+//
+//                .agentId(a.getUserId())
+//                .agentName(agentName)
+//
+//                .submissionTime(s.getSubmissionTime())
+//
+//                .validVotes(validVotes)
+//                .invalidTotal(invalidTotal)
+//
+//                .candidateVotesJson(candidateVotesJson)
+//                .candidateVotes(votesMap)
+//
+//                .ballotsCast(s.getBallotsCast())
+//                .invalidBallots(s.getInvalidBallots())
+//                .unmarkedBallots(s.getUnmarkedBallots())
+//                .rejectedBallots(s.getRejectedBallots())
+//                .spoiledBallots(s.getSpoiledBallots())
+//                .unusedBallots(s.getUnusedBallots())
+//
+//                .status(s.getStatus())
+//                .comments(s.getComments())
+////                .flaggedBy(s.getFlaggedBy())
+//                .dateFlagged(s.getDateFlagged())
+//
+//                .latitude(lat)
+//                .longitude(lon)
+//
+//                .verifiedBy(v != null ? v.getUserId() : null)
+//                .verifiedByName(verifiedByName)
+//                .dateVerified(s.getDateVerified())
+//
+//                .clientIp(s.getClientIp())
+//                .userAgent(s.getUserAgent())
+//                .submissionHash(s.getSubmissionHash())
+//                .version(s.getVersion())
+//                .idempotencyKey(s.getIdempotencyKey())
+//
+//                .submissionSignerKeyId(s.getSubmissionSignerKeyId())
+//                .submissionSignature(s.getSubmissionSignature())
+//                .chainHash(s.getChainHash())
+//                .build();
+//    }
 
     public VoteSubmission toEntity(
             VoteSubmissionCreateRequest req,
@@ -147,6 +259,7 @@ public class VoteSubmissionMapper {
 
         s.setStatus(VoteStatus.PENDING);
         s.setComments(req.getComments());
+
         s.setClientIp(req.getClientIp());
         s.setUserAgent(req.getUserAgent());
 

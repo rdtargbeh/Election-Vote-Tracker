@@ -10,6 +10,7 @@ import java.util.UUID;
 @Setter
 public class ObserverReportUpdateRequest {
     private UUID countyId;            // nullable
+    private UUID districtId;
     private UUID centerId;            // nullable
     private String type;              // nullable (ReportType)
     private String description;       // nullable

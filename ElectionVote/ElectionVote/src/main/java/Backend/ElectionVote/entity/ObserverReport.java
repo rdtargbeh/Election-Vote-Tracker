@@ -52,6 +52,11 @@ public class ObserverReport extends AuditBaseEntity {
     private County county;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "district_id",
+            foreignKey = @ForeignKey(name = "fk_center_district"))
+    private District district;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "center_id",
             foreignKey = @ForeignKey(name = "observer_report_center_id_fkey"))
     private PollingCenter pollingCenter;

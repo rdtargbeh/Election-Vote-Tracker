@@ -1,13 +1,15 @@
 // SubmissionFormModal.tsx
-// ✅ FULL UPDATED CODE
+// ✅ FULL FINAL UPDATED CODE
 //
-// ✅ CHANGE
-// - Added 2 read-only fields on the form:
-//   1) Registered Voters (from PollingPlaceAllocation)
-//   2) Ballots Issued (from PollingPlaceAllocation)
-// - Displayed in the Ballots Summary section (read-only).
-// - Shows a warning if Ballots Cast (auto) > Ballots Issued.
-// ❗No other logic changed.
+// ✅ FIXES INCLUDED
+// - Flag UI in form (checkbox + reason textarea) for CREATE + EDIT
+// - Sends required backend fields: actorUserId + flagged + comments
+// - Shows Actor name (from /users/me when possible)
+// - CREATE: if “Flag this submission” is checked, it flags immediately AFTER create succeeds
+// - EDIT: Apply Flag / Unflag uses the checkbox + reason (no prompt)
+// - FIX: typo flagded -> flagged
+// - Keeps previous logic + validations
+// - Keeps edit first-open candidate votes fix (only clear votes on contest change in CREATE mode)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -53,6 +55,7 @@ import {
   getSubmission,
   updateSubmissionJson,
   updateSubmissionMultipart,
+  flagSubmission,
   type VoteSubmissionDto,
   type VoteSubmissionCreateRequest,
   type VoteSubmissionUpdateRequest,
@@ -61,7 +64,6 @@ import {
 import { fetchMe } from "../../../../../shared/services/userService";
 import type { UserDto } from "../../../../../auth/userTypes";
 
-// ✅ NEW: place allocation lookup for ballotsIssued/registeredVoters
 import {
   searchPlaceAllocations,
   type PollingPlaceAllocationDto,
@@ -107,7 +109,6 @@ function placeLabel(p: any): string {
     "—"
   );
 }
-
 function clampNum(n: any) {
   const v = Number(n);
   if (!isFinite(v) || v < 0) return 0;
@@ -153,6 +154,7 @@ export default function SubmissionFormModal(props: {
   const agentUser = meQ.data ?? props.user;
   const agentName = userFullName(agentUser);
   const agentInitials = initials(agentUser);
+  const actorUserId = (agentUser as any)?.userId ?? props.agentId;
 
   /** ---------------- Location chain (create only) ---------------- */
   const countiesQ = useQuery<CountyDto[]>({
@@ -243,13 +245,17 @@ export default function SubmissionFormModal(props: {
   const [unmarkedBallots, setUnmarkedBallots] = useState<number | "">("");
   const [unusedBallots, setUnusedBallots] = useState<number | "">("");
 
-  // ✅ NEW: read-only expectations from allocation
+  // ✅ NEW: allocation read-only
   const [expectedRegisteredVoters, setExpectedRegisteredVoters] = useState<
     number | null
   >(null);
   const [expectedBallotsIssued, setExpectedBallotsIssued] = useState<
     number | null
   >(null);
+
+  // ✅ NEW: flag UI
+  const [flagChecked, setFlagChecked] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
 
   const [comments, setComments] = useState<string>("");
   const [latitude, setLatitude] = useState<number | "">("");
@@ -323,7 +329,7 @@ export default function SubmissionFormModal(props: {
 
   const validVotes = useMemo(() => sumVotes(candidateVotes), [candidateVotes]);
 
-  // ✅ ballotsCast includes unmarkedBallots (per your clarification)
+  // ✅ ballotsCast includes unmarkedBallots
   const ballotsCastNumber = useMemo(() => {
     return (
       validVotes +
@@ -340,7 +346,6 @@ export default function SubmissionFormModal(props: {
     unmarkedBallots,
   ]);
 
-  // ✅ NEW: rule check (read-only warning only)
   const exceedsIssued =
     expectedBallotsIssued != null && ballotsCastNumber > expectedBallotsIssued;
 
@@ -384,10 +389,12 @@ export default function SubmissionFormModal(props: {
       setUnmarkedBallots("");
       setUnusedBallots("");
       setComments("");
-
-      // ✅ reset expectations
       setExpectedRegisteredVoters(null);
       setExpectedBallotsIssued(null);
+
+      // ✅ reset flag UI for new create
+      setFlagChecked(false);
+      setFlagReason("");
     }
   }, [visible, isCreate]);
 
@@ -396,8 +403,6 @@ export default function SubmissionFormModal(props: {
     setMDistrict("");
     setSelectedCenter("");
     setSelectedPlace("");
-
-    // ✅ reset expectations when county changes
     setExpectedRegisteredVoters(null);
     setExpectedBallotsIssued(null);
   }, [mCounty, visible, isCreate]);
@@ -406,16 +411,16 @@ export default function SubmissionFormModal(props: {
     if (!visible || !isCreate) return;
     setSelectedCenter("");
     setSelectedPlace("");
-
-    // ✅ reset expectations when district changes
     setExpectedRegisteredVoters(null);
     setExpectedBallotsIssued(null);
   }, [mDistrict, visible, isCreate]);
 
+  // ✅ FIX: only clear votes when contest changes in CREATE mode.
   useEffect(() => {
     if (!visible) return;
+    if (!isCreate) return;
     setCandidateVotes({});
-  }, [selectedContest, visible]);
+  }, [selectedContest, visible, isCreate]);
 
   /** ---------------- Edit: load + hydrate */
   const editQ = useQuery<VoteSubmissionDto>({
@@ -425,6 +430,10 @@ export default function SubmissionFormModal(props: {
     staleTime: 0,
     retry: 1,
   });
+
+  const editStatus = String((editQ.data as any)?.status ?? "").toUpperCase();
+  const isFlagged = editStatus === "FLAGGED";
+  const isDraft = editStatus === "DRAFT";
 
   useEffect(() => {
     if (!visible || !isEdit) return;
@@ -444,16 +453,27 @@ export default function SubmissionFormModal(props: {
     setFiles([]);
     setPreviews([]);
 
-    // ✅ hydrate read-only expectations if backend already returns them
     setExpectedRegisteredVoters(
       typeof s.registeredVoters === "number" ? s.registeredVoters : null
     );
     setExpectedBallotsIssued(
       typeof s.ballotsIssued === "number" ? s.ballotsIssued : null
     );
+
+    // ✅ hydrate flag UI from status/comments
+    const st = String(s.status ?? "").toUpperCase();
+    const flaggedNow = st === "FLAGGED";
+    setFlagChecked(flaggedNow);
+
+    const c = String(s.comments ?? "");
+    if (flaggedNow && c.toLowerCase().startsWith("[flagged]")) {
+      setFlagReason(c.replace(/^\[flagged\]\s*/i, "").trim());
+    } else {
+      setFlagReason("");
+    }
   }, [visible, isEdit, editQ.data]);
 
-  // ✅ NEW: fetch place allocation when (electionId + selectedPlace) is known (CREATE)
+  /** ---------------- Place allocation (CREATE) */
   const placeAllocQ = useQuery<PollingPlaceAllocationDto | null>({
     enabled:
       visible &&
@@ -474,10 +494,8 @@ export default function SubmissionFormModal(props: {
     retry: 1,
   });
 
-  // apply allocation to read-only fields
   useEffect(() => {
-    if (!visible) return;
-    if (!isCreate) return;
+    if (!visible || !isCreate) return;
     if (!selectedPlace) return;
 
     const alloc = placeAllocQ.data;
@@ -488,11 +506,7 @@ export default function SubmissionFormModal(props: {
           : null
       );
       setExpectedBallotsIssued(
-        typeof alloc.ballotsIssued === "number"
-          ? Number(alloc.ballotsIssued)
-          : alloc.ballotsIssued == null
-          ? null
-          : Number(alloc.ballotsIssued)
+        alloc.ballotsIssued == null ? null : Number(alloc.ballotsIssued)
       );
     } else {
       setExpectedRegisteredVoters(null);
@@ -500,7 +514,6 @@ export default function SubmissionFormModal(props: {
     }
   }, [visible, isCreate, selectedPlace, placeAllocQ.data]);
 
-  // reset expectations when place changes (before fetch resolves)
   useEffect(() => {
     if (!visible || !isCreate) return;
     if (!selectedPlace) {
@@ -513,7 +526,19 @@ export default function SubmissionFormModal(props: {
   const createM = useMutation({
     mutationFn: async (req: VoteSubmissionCreateRequest) =>
       createSubmissionMultipart({ payload: req, files }),
-    onSuccess: async () => {
+    onSuccess: async (created: any) => {
+      // ✅ if checkbox checked, flag immediately after create
+      if (flagChecked) {
+        const reason = flagReason.trim();
+        const newId = String(created?.submissionId ?? "");
+        if (newId && reason) {
+          await flagSubmission(newId, {
+            actorUserId,
+            flagged: true,
+            comments: reason,
+          });
+        }
+      }
       await props.onSaved();
     },
   });
@@ -524,12 +549,13 @@ export default function SubmissionFormModal(props: {
       req: VoteSubmissionUpdateRequest;
       files?: File[];
     }) => {
-      if (p.files && p.files.length)
+      if (p.files && p.files.length) {
         return updateSubmissionMultipart({
           id: p.id,
           payload: p.req,
           files: p.files,
         });
+      }
       return updateSubmissionJson(p.id, p.req);
     },
     onSuccess: async () => {
@@ -537,17 +563,48 @@ export default function SubmissionFormModal(props: {
     },
   });
 
-  const busy = createM.isPending || updateM.isPending;
+  const flagM = useMutation({
+    mutationFn: async (p: {
+      id: string;
+      flagged: boolean;
+      comments?: string;
+    }) => {
+      return flagSubmission(p.id, {
+        actorUserId,
+        flagged: p.flagged, // ✅ FIXED
+        comments: p.comments, // ✅ plural
+      });
+    },
+    onSuccess: async () => {
+      await editQ.refetch();
+      await props.onSaved();
+    },
+  });
+
+  const busy = createM.isPending || updateM.isPending || flagM.isPending;
+
   const orgIdForCreate = props.effectiveOrgId || "";
-  const canActuallySubmit =
+
+  const baseReady =
     props.canCreate &&
     !createM.isPending &&
     Boolean(orgIdForCreate) &&
     Boolean(props.electionId) &&
     Boolean(selectedCenter) &&
     Boolean(selectedPlace) &&
-    Boolean(selectedContest) &&
-    files.length > 0;
+    Boolean(selectedContest);
+
+  const flagReasonOk = !flagChecked || Boolean(flagReason.trim());
+
+  const canActuallySubmit = baseReady && files.length > 0 && flagReasonOk;
+  const canSaveDraft = baseReady && flagReasonOk;
+
+  const canSubmitEditDraft =
+    props.canCreate &&
+    Boolean(props.submissionId) &&
+    isDraft &&
+    files.length > 0 &&
+    !updateM.isPending;
 
   if (!props.open) return null;
 
@@ -564,9 +621,53 @@ export default function SubmissionFormModal(props: {
     ? `${electionName} • ${contestName}`
     : `Contest: ${contestName}`;
 
+  const buildCreateReq = (draft: boolean): VoteSubmissionCreateRequest => {
+    return {
+      orgId: orgIdForCreate,
+      electionId: props.electionId,
+      centerId: selectedCenter,
+      placeId: selectedPlace,
+      agentId: props.agentId,
+      contestId: selectedContest,
+      candidateVotes,
+      ballotsCast: ballotsCastNumber,
+      invalidBallots:
+        invalidBallots === "" ? undefined : Number(invalidBallots),
+      rejectedBallots:
+        rejectedBallots === "" ? undefined : Number(rejectedBallots),
+      spoiledBallots:
+        spoiledBallots === "" ? undefined : Number(spoiledBallots),
+      unmarkedBallots:
+        unmarkedBallots === "" ? undefined : Number(unmarkedBallots),
+      unusedBallots: unusedBallots === "" ? undefined : Number(unusedBallots),
+      comments: comments || undefined,
+      latitude: latitude === "" ? undefined : Number(latitude),
+      longitude: longitude === "" ? undefined : Number(longitude),
+      idempotencyKey: `${props.agentId}-${Date.now()}`,
+      draft: draft ? true : undefined,
+    };
+  };
+
+  const buildUpdateReq = (): VoteSubmissionUpdateRequest => {
+    return {
+      candidateVotes,
+      invalidBallots:
+        invalidBallots === "" ? undefined : Number(invalidBallots),
+      rejectedBallots:
+        rejectedBallots === "" ? undefined : Number(rejectedBallots),
+      spoiledBallots:
+        spoiledBallots === "" ? undefined : Number(spoiledBallots),
+      unmarkedBallots:
+        unmarkedBallots === "" ? undefined : Number(unmarkedBallots),
+      unusedBallots: unusedBallots === "" ? undefined : Number(unusedBallots),
+      comments: comments || undefined,
+      latitude: latitude === "" ? undefined : Number(latitude),
+      longitude: longitude === "" ? undefined : Number(longitude),
+    };
+  };
+
   return (
     <div className="fixed inset-0 z-50">
-      {/* overlay */}
       <div
         className="absolute inset-0 bg-slate-900/40"
         onClick={() => {
@@ -575,7 +676,6 @@ export default function SubmissionFormModal(props: {
         }}
       />
 
-      {/* Modal wrapper */}
       <div className="fixed inset-0 flex items-end sm:items-center justify-center p-0 sm:p-4">
         <div className="w-full sm:max-w-3xl md:max-w-5xl lg:max-w-6xl bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col h-[calc(100vh-8px)] sm:h-auto sm:max-h-[82vh] overflow-hidden">
           {/* header */}
@@ -895,7 +995,6 @@ export default function SubmissionFormModal(props: {
                       />
                     </div>
 
-                    {/* ✅ NEW: read-only expectations */}
                     <div className="col-span-2">
                       <ReadOnlyStat
                         label="Ballots Issued (expected)"
@@ -943,7 +1042,6 @@ export default function SubmissionFormModal(props: {
                       value={spoiledBallots}
                       onChange={setSpoiledBallots}
                     />
-
                     <NumberField
                       label="Unmarked"
                       value={unmarkedBallots}
@@ -1011,7 +1109,8 @@ export default function SubmissionFormModal(props: {
 
                     {isCreate && !files.length && (
                       <div className="mt-2 text-xs font-bold text-red-700">
-                        Tally sheet is required.
+                        Tally sheet is required to Submit. (Draft can be saved
+                        without evidence.)
                       </div>
                     )}
 
@@ -1060,6 +1159,46 @@ export default function SubmissionFormModal(props: {
                 </Section>
 
                 <Section title="Notes">
+                  {/* ✅ FLAG UI (checkbox + actor + reason) */}
+                  <div className="mb-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-sm font-extrabold">
+                        <input
+                          type="checkbox"
+                          checked={flagChecked}
+                          onChange={(e) => setFlagChecked(e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                        <span>Flag this submission</span>
+                      </label>
+
+                      <div className="text-[11px] font-extrabold text-slate-600">
+                        Actor:{" "}
+                        <span className="text-slate-900">{agentName}</span>
+                      </div>
+                    </div>
+
+                    {flagChecked && (
+                      <div className="mt-2">
+                        <div className="mb-1 text-[11px] font-extrabold text-slate-600">
+                          Flag Reason (required)
+                        </div>
+                        <textarea
+                          value={flagReason}
+                          onChange={(e) => setFlagReason(e.target.value)}
+                          rows={2}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                          placeholder="Why are you flagging this submission?"
+                        />
+                        {!flagReason.trim() ? (
+                          <div className="mt-1 text-xs font-bold text-red-700">
+                            Reason is required when flagging.
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+
                   <textarea
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
@@ -1192,6 +1331,11 @@ export default function SubmissionFormModal(props: {
                 {friendlyError(updateM.error)}
               </div>
             )}
+            {isEdit && flagM.isError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                {friendlyError(flagM.error)}
+              </div>
+            )}
           </div>
 
           {/* footer */}
@@ -1208,119 +1352,198 @@ export default function SubmissionFormModal(props: {
                 Cancel
               </button>
 
-              {isCreate ? (
+              {/* ✅ EDIT: Apply Flag / Unflag based on checkbox */}
+              {isEdit ? (
                 <button
                   type="button"
-                  disabled={!canActuallySubmit}
-                  onClick={() => {
-                    if (!orgIdForCreate) {
-                      alert("Select a tenant (org) first.");
-                      return;
-                    }
-                    const req: VoteSubmissionCreateRequest = {
-                      orgId: orgIdForCreate,
-                      electionId: props.electionId,
-                      centerId: selectedCenter,
-                      placeId: selectedPlace,
-                      agentId: props.agentId,
-                      contestId: selectedContest,
-                      candidateVotes,
-                      ballotsCast: ballotsCastNumber,
-                      invalidBallots:
-                        invalidBallots === ""
-                          ? undefined
-                          : Number(invalidBallots),
-                      rejectedBallots:
-                        rejectedBallots === ""
-                          ? undefined
-                          : Number(rejectedBallots),
-                      spoiledBallots:
-                        spoiledBallots === ""
-                          ? undefined
-                          : Number(spoiledBallots),
-                      unmarkedBallots:
-                        unmarkedBallots === ""
-                          ? undefined
-                          : Number(unmarkedBallots),
-                      unusedBallots:
-                        unusedBallots === ""
-                          ? undefined
-                          : Number(unusedBallots),
-                      comments: comments || undefined,
-                      latitude: latitude === "" ? undefined : Number(latitude),
-                      longitude:
-                        longitude === "" ? undefined : Number(longitude),
-                      idempotencyKey: `${props.agentId}-${Date.now()}`,
-                    };
-                    createM.mutate(req, { onSuccess: () => props.onClose() });
-                  }}
-                  className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
-                    !canActuallySubmit || createM.isPending
-                      ? "bg-slate-400"
-                      : "bg-slate-900 hover:bg-black"
-                  }`}
-                >
-                  Submit
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={updateM.isPending || !props.submissionId}
+                  disabled={
+                    busy ||
+                    !props.submissionId ||
+                    editQ.isLoading ||
+                    (flagChecked && !flagReason.trim())
+                  }
                   onClick={() => {
                     if (!props.submissionId) return;
-                    const req: VoteSubmissionUpdateRequest = {
-                      candidateVotes,
-                      invalidBallots:
-                        invalidBallots === ""
-                          ? undefined
-                          : Number(invalidBallots),
-                      rejectedBallots:
-                        rejectedBallots === ""
-                          ? undefined
-                          : Number(rejectedBallots),
-                      spoiledBallots:
-                        spoiledBallots === ""
-                          ? undefined
-                          : Number(spoiledBallots),
-                      unmarkedBallots:
-                        unmarkedBallots === ""
-                          ? undefined
-                          : Number(unmarkedBallots),
-                      unusedBallots:
-                        unusedBallots === ""
-                          ? undefined
-                          : Number(unusedBallots),
-                      comments: comments || undefined,
-                      latitude: latitude === "" ? undefined : Number(latitude),
-                      longitude:
-                        longitude === "" ? undefined : Number(longitude),
-                    };
-                    updateM.mutate(
-                      {
+
+                    if (flagChecked) {
+                      const reason = flagReason.trim();
+                      if (!reason) {
+                        alert("Reason is required when flagging.");
+                        return;
+                      }
+                      flagM.mutate({
                         id: props.submissionId,
-                        req,
-                        files: files.length ? files : undefined,
-                      },
-                      { onSuccess: () => props.onClose() }
-                    );
+                        flagged: true,
+                        comments: reason,
+                      });
+                      return;
+                    }
+
+                    if (!confirm("Unflag this submission?")) return;
+                    flagM.mutate({
+                      id: props.submissionId,
+                      flagged: false,
+                      comments: undefined,
+                    });
                   }}
                   className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
-                    updateM.isPending
+                    busy || !props.submissionId
                       ? "bg-slate-400"
+                      : isFlagged
+                      ? "bg-slate-700 hover:bg-slate-800"
                       : "bg-slate-900 hover:bg-black"
                   }`}
                 >
-                  Save Changes
+                  {flagChecked ? "Apply Flag" : "Unflag"}
                 </button>
+              ) : null}
+
+              {isCreate ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!canSaveDraft}
+                    onClick={() => {
+                      if (!orgIdForCreate) {
+                        alert("Select a tenant (org) first.");
+                        return;
+                      }
+                      if (flagChecked && !flagReason.trim()) {
+                        alert("Reason is required when flagging.");
+                        return;
+                      }
+                      const req = buildCreateReq(true);
+                      createM.mutate(req, { onSuccess: () => props.onClose() });
+                    }}
+                    className={`h-10 w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold ${
+                      !canSaveDraft || createM.isPending
+                        ? "opacity-60"
+                        : "hover:bg-slate-50"
+                    }`}
+                  >
+                    Save Draft
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canActuallySubmit}
+                    onClick={() => {
+                      if (!orgIdForCreate) {
+                        alert("Select a tenant (org) first.");
+                        return;
+                      }
+                      if (flagChecked && !flagReason.trim()) {
+                        alert("Reason is required when flagging.");
+                        return;
+                      }
+                      const req = buildCreateReq(false);
+                      createM.mutate(req, { onSuccess: () => props.onClose() });
+                    }}
+                    className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
+                      !canActuallySubmit || createM.isPending
+                        ? "bg-slate-400"
+                        : "bg-slate-900 hover:bg-black"
+                    }`}
+                  >
+                    Submit
+                  </button>
+                </>
+              ) : (
+                <>
+                  {isDraft ? (
+                    <button
+                      type="button"
+                      disabled={updateM.isPending || !props.submissionId}
+                      onClick={() => {
+                        if (!props.submissionId) return;
+                        const req = buildUpdateReq();
+                        updateM.mutate(
+                          {
+                            id: props.submissionId,
+                            req,
+                            files: files.length ? files : undefined,
+                          },
+                          { onSuccess: () => props.onClose() }
+                        );
+                      }}
+                      className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
+                        updateM.isPending
+                          ? "bg-slate-400"
+                          : "bg-slate-900 hover:bg-black"
+                      }`}
+                    >
+                      Save Draft
+                    </button>
+                  ) : null}
+
+                  {isDraft ? (
+                    <button
+                      type="button"
+                      disabled={!canSubmitEditDraft}
+                      onClick={() => {
+                        if (!props.submissionId) return;
+                        if (!files.length) {
+                          alert("Upload tally sheet to submit this draft.");
+                          return;
+                        }
+                        const req = buildUpdateReq();
+                        updateM.mutate(
+                          {
+                            id: props.submissionId,
+                            req,
+                            files: files.length ? files : undefined,
+                          },
+                          { onSuccess: () => props.onClose() }
+                        );
+                      }}
+                      className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
+                        !canSubmitEditDraft
+                          ? "bg-slate-400"
+                          : "bg-slate-900 hover:bg-black"
+                      }`}
+                    >
+                      Submit
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={updateM.isPending || !props.submissionId}
+                      onClick={() => {
+                        if (!props.submissionId) return;
+                        const req = buildUpdateReq();
+                        updateM.mutate(
+                          {
+                            id: props.submissionId,
+                            req,
+                            files: files.length ? files : undefined,
+                          },
+                          { onSuccess: () => props.onClose() }
+                        );
+                      }}
+                      className={`h-10 w-full sm:w-auto rounded-xl px-4 text-sm font-extrabold text-white ${
+                        updateM.isPending
+                          ? "bg-slate-400"
+                          : "bg-slate-900 hover:bg-black"
+                      }`}
+                    >
+                      Save Changes
+                    </button>
+                  )}
+                </>
               )}
             </div>
 
             {isCreate && (!props.effectiveOrgId || !files.length) && (
               <div className="mt-2 text-[11px] text-slate-600">
-                Tip: Choose contest, enter votes, and upload tally sheet to
-                enable Submit.
+                Tip: Draft can be saved without evidence. Submit requires tally
+                sheet.
               </div>
             )}
+            {isEdit && isDraft && !files.length ? (
+              <div className="mt-2 text-[11px] text-slate-600">
+                Tip: Upload tally sheet to enable Submit for this draft.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

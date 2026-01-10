@@ -1,9 +1,6 @@
 package Backend.ElectionVote.service;
 
-import Backend.ElectionVote.dto.VoteSubmissionCreateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionDto;
-import Backend.ElectionVote.dto.VoteSubmissionUpdateRequest;
-import Backend.ElectionVote.dto.VoteSubmissionVerifyRequest;
+import Backend.ElectionVote.dto.*;
 import Backend.ElectionVote.entity.PollingCenterAllocation;
 import Backend.ElectionVote.entity.PollingPlaceAllocation;
 import Backend.ElectionVote.enums.ContestCategory;
@@ -31,6 +28,10 @@ public interface VoteSubmissionService {
     VoteSubmissionDto verify(UUID id, VoteSubmissionVerifyRequest req);
 
     void delete(UUID id);
+
+    VoteSubmissionDto submitDraft(UUID id, HttpServletRequest request);
+
+    VoteSubmissionDto flag(UUID id, VoteSubmissionFlagRequest req);
 
     VoteSubmissionDto get(UUID id);
 

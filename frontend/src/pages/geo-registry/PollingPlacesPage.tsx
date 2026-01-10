@@ -86,6 +86,7 @@ type FilterMode = "PLACE" | "COUNTY" | "DISTRICT" | "CENTER";
 export default function PollingPlacesPage() {
   const qc = useQueryClient();
 
+  // Who can Edit Dashboard
   const dashboardMode = useAuthStore((s) => s.dashboardMode);
   const canEdit = dashboardMode === "NEC" || dashboardMode === "SYSTEM";
 

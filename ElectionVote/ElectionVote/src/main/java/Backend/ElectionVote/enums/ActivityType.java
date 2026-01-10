@@ -29,6 +29,8 @@ public enum ActivityType {
     SUBMISSION_VERIFY,
     SUBMISSION_REJECT,
     TALLY_UPLOAD,
+    VOTE_FLAGGED,
+    VOTE_UNFLAGGED,
 
     // Observer reports
     OBSERVER_REPORT_CREATE,

@@ -1,13 +1,11 @@
 // src/app/layout/TopBar.tsx
 import { useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/lib/apiClient";
 import { useAuthStore } from "../../shared/store/authStore";
 import type { ElectionDto } from "../../auth/api";
 
-// ✅ ADD
-// import UserProfileModal from "../../pages/profile/UserProfileModal";
 import UserProfileDrawer from "../../pages/profile/UserProfileDrawer";
 
 type MeDto = {
@@ -47,8 +45,9 @@ function pill(cls: string) {
 }
 
 export default function TopBar() {
-  const [profileOpen, setProfileOpen] = useState(false); // ✅ ADD
+  const [profileOpen, setProfileOpen] = useState(false);
 
+  const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
 
@@ -100,6 +99,29 @@ export default function TopBar() {
   const showOfficial = dashboardMode === "NEC";
   const officialValue = false;
 
+  // ✅ ADD: logout handler
+  const handleLogout = async () => {
+    try {
+      // Optional (only if your backend supports it): invalidate session/cookie
+      await apiClient.post("/auth/logout");
+    } catch {
+      // ignore
+    } finally {
+      // Clear client-side auth state (adjust to your store API if different)
+      const st: any = useAuthStore.getState();
+      st.logout?.();
+      st.reset?.();
+      // Fallback: clear common tokens if you store any
+      try {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+      } catch {
+        // ignore
+      }
+      navigate("/login", { replace: true });
+    }
+  };
+
   return (
     <>
       <header className="h-14 w-full border-b border-slate-200 bg-white">
@@ -120,7 +142,6 @@ export default function TopBar() {
                 className={pill("border-slate-200 bg-white text-slate-700")}
               >
                 {tenantName}
-                {/* Tenant: {tenantName} */}
               </span>
 
               <span
@@ -133,7 +154,6 @@ export default function TopBar() {
                 className={pill("border-slate-200 bg-white text-slate-700")}
               >
                 {dashboardMode ?? "—"}
-                {/* Mode: {dashboardMode ?? "—"} */}
               </span>
 
               {isElectionScope ? (
@@ -199,6 +219,18 @@ export default function TopBar() {
 
           {/* Right */}
           <div className="flex items-center gap-3">
+            {/* ✅ ADD: Logout button (top bar) */}
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("Log out of EMS?")) handleLogout();
+              }}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50"
+              title="Log out"
+            >
+              Logout
+            </button>
+
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50"
@@ -227,7 +259,6 @@ export default function TopBar() {
 
       {/* ✅ Drawer */}
       <UserProfileDrawer
-        // <UserProfileModal
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
       />
