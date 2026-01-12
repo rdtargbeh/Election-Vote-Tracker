@@ -22,7 +22,8 @@ public class NecResultHistoryMapper {
         d.setTotalRegisteredVoters(h.getTotalRegisteredVoters());
         d.setBallotsCast(h.getBallotsCast());
         d.setInvalidBallots(h.getInvalidBallots());
-        d.setBlankBallots(h.getBlankBallots());
+        d.setUnmarkedBallots(h.getUnmarkedBallots());
+        d.setUnusedBallots(h.getUnusedBallots());
         d.setRejectedBallots(h.getRejectedBallots());
         d.setSpoiledBallots(h.getSpoiledBallots());
         d.setChangeType(h.getChangeType());

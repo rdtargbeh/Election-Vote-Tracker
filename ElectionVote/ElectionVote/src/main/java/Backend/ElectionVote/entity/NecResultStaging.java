@@ -56,8 +56,11 @@ public class NecResultStaging {
     @Column(name = "invalid_ballots")
     private Integer invalidBallots;
 
-    @Column(name = "blank_ballots")
-    private Integer blankBallots;
+    @Column(name = "unmarked_ballots")
+    private Integer unmarkedBallots;
+
+    @Column(name = "unused_ballots")
+    private Integer unusedBallots;
 
     @Column(name = "rejected_ballots")
     private Integer rejectedBallots;

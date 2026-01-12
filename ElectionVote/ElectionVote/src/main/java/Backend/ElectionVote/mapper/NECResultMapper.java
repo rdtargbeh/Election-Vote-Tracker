@@ -42,12 +42,15 @@ public class NECResultMapper {
                 .totalRegisteredVoters(nz(r.getTotalRegisteredVoters()))
                 .ballotsCast(nz(r.getBallotsCast()))
                 .invalidBallots(nz(r.getInvalidBallots()))
-                .blankBallots(nz(r.getBlankBallots()))
+                .unmarkedBallots(nz(r.getUnmarkedBallots()))
+                .unusedBallots(nz(r.getUnusedBallots()))
                 .rejectedBallots(nz(r.getRejectedBallots()))
                 .spoiledBallots(nz(r.getSpoiledBallots()))
                 .source(r.getSource())
                 .uploadTime(r.getUploadTime())
                 .build();
+
+
     }
 
 
@@ -62,7 +65,8 @@ public class NECResultMapper {
         r.setTotalRegisteredVoters(nz(req.getTotalRegisteredVoters()));
         r.setBallotsCast(nz(req.getBallotsCast()));
         r.setInvalidBallots(nz(req.getInvalidBallots()));
-        r.setBlankBallots(nz(req.getBlankBallots()));
+        r.setUnmarkedBallots(nz(req.getUnmarkedBallots()));
+        r.setUnusedBallots(nz(req.getUnusedBallots()));
         r.setRejectedBallots(nz(req.getRejectedBallots()));
         r.setSpoiledBallots(nz(req.getSpoiledBallots()));
         r.setSource(req.getSource());
@@ -75,7 +79,8 @@ public class NECResultMapper {
         if (req.getTotalRegisteredVoters() != null) r.setTotalRegisteredVoters(req.getTotalRegisteredVoters());
         if (req.getBallotsCast() != null)    r.setBallotsCast(req.getBallotsCast());
         if (req.getInvalidBallots() != null) r.setInvalidBallots(req.getInvalidBallots());
-        if (req.getBlankBallots() != null)   r.setBlankBallots(req.getBlankBallots());
+        if (req.getUnmarkedBallots() != null)   r.setUnmarkedBallots(req.getUnmarkedBallots());
+        if (req.getUnusedBallots() != null)   r.setUnusedBallots(req.getUnusedBallots());
         if (req.getRejectedBallots() != null)r.setRejectedBallots(req.getRejectedBallots());
         if (req.getSpoiledBallots() != null) r.setSpoiledBallots(req.getSpoiledBallots());
         if (req.getSource() != null)         r.setSource(req.getSource());
@@ -96,7 +101,8 @@ public class NECResultMapper {
         d.setTotalRegisteredVoters(s.getTotalRegisteredVoters());
         d.setBallotsCast(s.getBallotsCast());
         d.setInvalidBallots(s.getInvalidBallots());
-        d.setBlankBallots(s.getBlankBallots());
+        d.setUnmarkedBallots(s.getUnmarkedBallots());
+        d.setUnusedBallots(s.getUnusedBallots());
         d.setRejectedBallots(s.getRejectedBallots());
         d.setSpoiledBallots(s.getSpoiledBallots());
         d.setSource(s.getSource());
@@ -114,27 +120,6 @@ public class NECResultMapper {
         d.setProcessedResultId(s.getProcessedResultId());
         return d;
     }
-
-    // -------------------------
-    // NecResultPublic <-> DTO
-//    // -------------------------
-//    public NecResultPublicDto toPublicDto(NecResultPublic p) {
-//        if (p == null) return null;
-//        NecResultPublicDto d = new NecResultPublicDto();
-//        d.setElectionId(p.getElectionId());
-//        d.setAssignedCenterId(p.getAssignedCenterId());
-//        d.setCenterCode(p.getCenterCode());
-//        d.setCandidateVotes(p.getCandidateVotes());
-//        d.setTotalRegisteredVoters(p.getTotalRegisteredVoters());
-//        d.setBallotsCast(p.getBallotsCast());
-//        d.setInvalidBallots(p.getInvalidBallots());
-//        d.setBlankBallots(p.getBlankBallots());
-//        d.setRejectedBallots(p.getRejectedBallots());
-//        d.setSpoiledBallots(p.getSpoiledBallots());
-//        d.setSource(p.getSource());
-//        d.setPublishedAt(p.getPublishedAt());
-//        return d;
-//    }
 
     // -------------------------
     // JSON helpers - use Map<String,Integer> consistently

@@ -29,7 +29,8 @@ public class NECResultCreateRequest {
     private Integer invalidBallots = 0;
 
     @NotNull @Min(0)
-    private Integer blankBallots = 0;
+    private Integer unmarkedBallots = 0;
+    private Integer unusedBallots = 0;
 
     @NotNull @Min(0)
     private Integer rejectedBallots = 0;

@@ -55,8 +55,11 @@ public class NECResult {
     @Column(name = "invalid_ballots", nullable = false)
     private Integer invalidBallots = 0;
 
-    @Column(name = "blank_ballots", nullable = false)
-    private Integer blankBallots = 0;
+    @Column(name = "unmarked_ballots", nullable = false)
+    private Integer unmarkedBallots = 0;
+
+    @Column(name = "unused_ballots", nullable = false)
+    private Integer unusedBallots = 0;
 
     @Column(name = "rejected_ballots", nullable = false)
     private Integer rejectedBallots = 0;
@@ -80,7 +83,7 @@ public class NECResult {
     public void prePersist() {
         if (uploadTime == null) uploadTime = LocalDateTime.now();
         if (invalidBallots == null) invalidBallots = 0;
-        if (blankBallots == null) blankBallots = 0;
+        if (unmarkedBallots == null) unmarkedBallots = 0;
         if (rejectedBallots == null) rejectedBallots = 0;
         if (spoiledBallots == null) spoiledBallots = 0;
         if (totalRegisteredVoters == null) totalRegisteredVoters = 0;

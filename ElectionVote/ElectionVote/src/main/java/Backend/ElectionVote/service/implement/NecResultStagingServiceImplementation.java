@@ -50,7 +50,8 @@ public class NecResultStagingServiceImplementation implements NecResultStagingSe
         s.setTotalRegisteredVoters(dto.getTotalRegisteredVoters());
         s.setBallotsCast(dto.getBallotsCast());
         s.setInvalidBallots(dto.getInvalidBallots());
-        s.setBlankBallots(dto.getBlankBallots());
+        s.setUnmarkedBallots(dto.getUnmarkedBallots());
+        s.setUnusedBallots(dto.getUnusedBallots());
         s.setRejectedBallots(dto.getRejectedBallots());
         s.setSpoiledBallots(dto.getSpoiledBallots());
         s.setSource(dto.getSource());
@@ -131,7 +132,8 @@ public class NecResultStagingServiceImplementation implements NecResultStagingSe
             }
 
             int otherInvalid = (s.getInvalidBallots() == null ? 0 : s.getInvalidBallots())
-                    + (s.getBlankBallots() == null ? 0 : s.getBlankBallots())
+                    + (s.getUnmarkedBallots() == null ? 0 : s.getUnmarkedBallots())
+                    + (s.getUnusedBallots() == null ? 0 : s.getUnusedBallots())
                     + (s.getRejectedBallots() == null ? 0 : s.getRejectedBallots())
                     + (s.getSpoiledBallots() == null ? 0 : s.getSpoiledBallots());
 
@@ -241,7 +243,8 @@ public class NecResultStagingServiceImplementation implements NecResultStagingSe
                                 s.getTotalRegisteredVoters(),
                                 s.getBallotsCast(),
                                 s.getInvalidBallots(),
-                                s.getBlankBallots(),
+                                s.getUnmarkedBallots(),
+                                s.getUnusedBallots(),
                                 s.getRejectedBallots(),
                                 s.getSpoiledBallots(),
                                 s.getSource(),
@@ -261,7 +264,8 @@ public class NecResultStagingServiceImplementation implements NecResultStagingSe
                         s.getTotalRegisteredVoters(),
                         s.getBallotsCast(),
                         s.getInvalidBallots(),
-                        s.getBlankBallots(),
+                        s.getUnmarkedBallots(),
+                        s.getUnusedBallots(),
                         s.getRejectedBallots(),
                         s.getSpoiledBallots(),
                         changeType,

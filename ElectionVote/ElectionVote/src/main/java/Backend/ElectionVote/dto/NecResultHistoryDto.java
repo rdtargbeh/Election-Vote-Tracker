@@ -20,7 +20,8 @@ public class NecResultHistoryDto {
     private Integer totalRegisteredVoters;
     private Integer ballotsCast;
     private Integer invalidBallots;
-    private Integer blankBallots;
+    private Integer unmarkedBallots;
+    private Integer unusedBallots;
     private Integer rejectedBallots;
     private Integer spoiledBallots;
     private ChangeType changeType;

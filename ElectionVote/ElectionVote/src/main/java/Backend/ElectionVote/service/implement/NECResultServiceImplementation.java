@@ -7,7 +7,6 @@ import Backend.ElectionVote.mapper.NECResultMapper;
 import Backend.ElectionVote.repository.*;
 import Backend.ElectionVote.service.NECResultService;
 import Backend.ElectionVote.utility.NECResultSpecs;
-import Backend.ElectionVote.views.entity.NecResultGeo;
 import Backend.ElectionVote.views.repo.NecResultGeoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,8 +58,9 @@ public class NECResultServiceImplementation implements NECResultService {
 
         // Validate against allocation (registered + ballotsIssued)
         validateTally(req.getCandidateVotes(),
-                nz(req.getInvalidBallots()), nz(req.getBlankBallots()),
+                nz(req.getInvalidBallots()), nz(req.getUnmarkedBallots()),
                 nz(req.getRejectedBallots()), nz(req.getSpoiledBallots()),
+                nz(req.getUnusedBallots()),
                 nz(req.getBallotsCast()),
                 allocation.getRegisteredVoters(),
                 allocation.getBallotsIssued());
@@ -93,7 +93,8 @@ public class NECResultServiceImplementation implements NECResultService {
         long sumVotes = sumVotesFromJson(newVotesJson);
 
         int newInvalid   = coalesce(req.getInvalidBallots(), entity.getInvalidBallots());
-        int newBlank     = coalesce(req.getBlankBallots(), entity.getBlankBallots());
+        int newBlank     = coalesce(req.getUnmarkedBallots(), entity.getUnmarkedBallots());
+        int newUnused     = coalesce(req.getUnusedBallots(), entity.getUnusedBallots());
         int newRejected  = coalesce(req.getRejectedBallots(), entity.getRejectedBallots());
         int newSpoiled   = coalesce(req.getSpoiledBallots(), entity.getSpoiledBallots());
         int newCast      = coalesce(req.getBallotsCast(), entity.getBallotsCast());

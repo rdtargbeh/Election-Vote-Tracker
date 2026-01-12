@@ -121,7 +121,8 @@ public class ImportBatchServiceImplementation implements ImportBatchService {
             }
 
             int otherInvalid = (s.getInvalidBallots() == null ? 0 : s.getInvalidBallots())
-                    + (s.getBlankBallots() == null ? 0 : s.getBlankBallots())
+                    + (s.getUnmarkedBallots() == null ? 0 : s.getUnmarkedBallots())
+                    + (s.getUnusedBallots() == null ? 0 : s.getUnusedBallots())
                     + (s.getRejectedBallots() == null ? 0 : s.getRejectedBallots())
                     + (s.getSpoiledBallots() == null ? 0 : s.getSpoiledBallots());
 
